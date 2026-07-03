@@ -31,36 +31,40 @@ namespace {
 
 }
 
-void ReadExact(int fd, std::span<uint8_t> buf) {
-    size_t readTotally = 0;
+namespace message_broker {
 
-    while (readTotally < buf.size()) {
-        auto chunk = buf.subspan(readTotally);
-        ssize_t res = Read(fd, chunk);
-        
-        if (res == 0)
-            throw std::runtime_error("Socket closed while reading.");
+    void ReadExact(int fd, std::span<uint8_t> buf) {
+        size_t readTotally = 0;
 
-        if (res < 0) 
-            throw std::runtime_error("Socket read failed.");
+        while (readTotally < buf.size()) {
+            auto chunk = buf.subspan(readTotally);
+            ssize_t res = Read(fd, chunk);
+            
+            if (res == 0)
+                throw std::runtime_error("Socket closed while reading.");
 
-        readTotally += res;
+            if (res < 0) 
+                throw std::runtime_error("Socket read failed.");
+
+            readTotally += res;
+        }
     }
-}
 
-void WriteExact(int fd, std::span<uint8_t> buf) {
-    size_t readTotally = 0;
+    void WriteExact(int fd, std::span<uint8_t> buf) {
+        size_t readTotally = 0;
 
-    while (readTotally < buf.size()) {
-        auto chunk = buf.subspan(readTotally);
-        ssize_t res = Write(fd, chunk);
-        
-        if (res == 0)
-            throw std::runtime_error("Socket closed while writing.");
+        while (readTotally < buf.size()) {
+            auto chunk = buf.subspan(readTotally);
+            ssize_t res = Write(fd, chunk);
+            
+            if (res == 0)
+                throw std::runtime_error("Socket closed while writing.");
 
-        if (res < 0) 
-            throw std::runtime_error("Socket write failed.");
+            if (res < 0) 
+                throw std::runtime_error("Socket write failed.");
 
-        readTotally += res;
+            readTotally += res;
+        }
     }
+
 }

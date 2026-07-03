@@ -1,5 +1,5 @@
 #pragma once
 
-#include "IBrokerClient.hpp"
+#include <message_broker/IBrokerClient.hpp>
 
-class BrokerClient : public IBrokerClient {};
+class BrokerClient : public message_broker::IBrokerClient {};
