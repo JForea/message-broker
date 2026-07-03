@@ -3,4 +3,8 @@
 #include <array>
 #include <cstdint>
 
-using Guid = std::array<uint8_t, 16>;
+namespace message_broker {
+
+    using Guid = std::array<uint8_t, 16>;
+    
+}

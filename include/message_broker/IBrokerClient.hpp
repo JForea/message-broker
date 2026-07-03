@@ -4,27 +4,31 @@
 #include <optional>
 #include <message_broker/Message.hpp>
 
-class IBrokerClient {
-public:
+namespace message_broker {
 
-	virtual const Guid& GetClientId() = 0;
+	class IBrokerClient {
+	public:
 
-	// Get file descriptor of the created socket.
-	virtual int GetSocketFd() = 0;
+		virtual const Guid& GetClientId() = 0;
+
+		// Get file descriptor of the created socket.
+		virtual int GetSocketFd() = 0;
+		
+		virtual void Register() = 0;
+
+		virtual void SendMessage(const Guid& targetId, std::span<const uint8_t> data) = 0;
+
+		virtual void Broadcast(std::span<const uint8_t> data) = 0;
+
+		// Non-blocking get message.
+		virtual std::optional<Message> TryGetMessage() = 0;
+
+		// Blocking get message.
+		virtual Message GetMessage() = 0;
+		
+		virtual void Unregister() = 0;
+
+		virtual ~IBrokerClient() {}
+	};
 	
-	virtual void Register() = 0;
-
-	virtual void SendMessage(const Guid& targetId, std::span<const uint8_t> data) = 0;
-
-	virtual void Broadcast(std::span<const uint8_t> data) = 0;
-
-	// Non-blocking get message.
-	virtual std::optional<Message> TryGetMessage() = 0;
-
-	// Blocking get message.
-	virtual Message GetMessage() = 0;
-	
-	virtual void Unregister() = 0;
-
-	virtual ~IBrokerClient() {}
-};
+}
