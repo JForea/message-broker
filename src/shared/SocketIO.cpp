@@ -19,7 +19,7 @@ namespace {
         }
     }
 
-    ssize_t Write(int fd, std::span<uint8_t> buf) {
+    ssize_t Write(int fd, std::span<const uint8_t> buf) {
         while (true) {
             ssize_t res = ::send(fd, buf.data(), buf.size(), MSG_NOSIGNAL);
 
@@ -51,7 +51,7 @@ namespace message_broker {
         }
     }
 
-    void WriteExact(int fd, std::span<uint8_t> buf) {
+    void WriteExact(int fd, std::span<const uint8_t> buf) {
         size_t readTotally = 0;
 
         while (readTotally < buf.size()) {

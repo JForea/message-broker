@@ -12,6 +12,6 @@ namespace message_broker {
 
     // Writes exactly buf.size() bytes to the socket.
     // Throws if a write error occurs.
-    void WriteExact(int fd, std::span<uint8_t> buf);
+    void WriteExact(int fd, std::span<const uint8_t> buf);
 
 }
