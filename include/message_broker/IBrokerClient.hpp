@@ -7,15 +7,13 @@
 namespace message_broker {
 
 	class IBrokerClient {
-	public:
 
+	public:
 		virtual const Guid& GetClientId() = 0;
 
 		// Get file descriptor of the created socket.
 		virtual int GetSocketFd() = 0;
 		
-		virtual void Register() = 0;
-
 		virtual void SendMessage(const Guid& targetId, std::span<const uint8_t> data) = 0;
 
 		virtual void Broadcast(std::span<const uint8_t> data) = 0;
@@ -26,9 +24,7 @@ namespace message_broker {
 		// Blocking get message.
 		virtual Message GetMessage() = 0;
 		
-		virtual void Unregister() = 0;
-
 		virtual ~IBrokerClient() {}
 	};
-	
+
 }
