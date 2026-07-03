@@ -11,6 +11,7 @@ add_library(
     message-broker-client STATIC
     src/client/BrokerClient.cpp
     src/shared/SocketIO.cpp
+    src/shared/ProtocolIO.cpp
 
     include/message_broker/IBrokerClient.hpp
     include/message_broker/ClientFactory.hpp
@@ -19,6 +20,7 @@ add_library(
 
     src/shared/Protocol.hpp
     src/shared/SocketIO.hpp
+    src/shared/ProtocolIO.hpp
 )
 
 target_include_directories(
