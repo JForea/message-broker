@@ -1,4 +1,5 @@
 #include "SocketIOTests.hpp"
+#include "ProtocolIOTests.hpp"
 
 #include <signal.h>
 
@@ -8,5 +9,8 @@ int main() {
     TestReadWrite();
     TestReadFromClosedSocket();
     TestWriteIntoClosedSocket();
+
+    // PROTOCOL IO TESTS
+    TestProtocolReadWrite();
 
 }

@@ -36,8 +36,12 @@ enable_testing()
 add_executable(
     message-broker-tests
     tests/main.cpp
+
     tests/SocketIOTests.cpp
+    tests/ProtocolIOTests.cpp
+
     src/shared/SocketIO.cpp
+    src/shared/ProtocolIO.cpp
 )
 
 target_include_directories(
@@ -54,6 +58,6 @@ target_compile_features(
 )
 
 add_test(
-    NAME SocketIOTests
+    NAME ApplicationTests
     COMMAND message-broker-tests
 )
