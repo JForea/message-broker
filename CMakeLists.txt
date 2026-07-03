@@ -10,8 +10,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(
     message-broker-client STATIC
     src/client/BrokerClient.cpp
-    src/shared/SocketIO.cpp
-    src/shared/ProtocolIO.cpp
+    src/shared/io/SocketIO.cpp
+    src/shared/io/ProtocolIO.cpp
 
     include/message_broker/IBrokerClient.hpp
     include/message_broker/ClientFactory.hpp
@@ -19,8 +19,8 @@ add_library(
     include/message_broker/Message.hpp
 
     src/shared/Protocol.hpp
-    src/shared/SocketIO.hpp
-    src/shared/ProtocolIO.hpp
+    src/shared/io/SocketIO.hpp
+    src/shared/io/ProtocolIO.hpp
 )
 
 target_include_directories(
@@ -40,8 +40,8 @@ add_executable(
     tests/SocketIOTests.cpp
     tests/ProtocolIOTests.cpp
 
-    src/shared/SocketIO.cpp
-    src/shared/ProtocolIO.cpp
+    src/shared/io/SocketIO.cpp
+    src/shared/io/ProtocolIO.cpp
 )
 
 target_include_directories(

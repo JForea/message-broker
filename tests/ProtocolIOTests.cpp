@@ -1,4 +1,4 @@
-#include "shared/ProtocolIO.hpp"
+#include "shared/io/ProtocolIO.hpp"
 
 #include <sys/socket.h>
 #include <unistd.h>

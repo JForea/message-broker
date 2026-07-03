@@ -1,7 +1,7 @@
 #pragma once
 
 #include <message_broker/Guid.hpp>
-#include "Protocol.hpp"
+#include "shared/Protocol.hpp"
 
 #include <cstdint>
 #include <span>
