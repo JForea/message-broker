@@ -1,5 +1,6 @@
 #include "SocketIO.hpp"
 
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -9,7 +10,7 @@ namespace {
 
     ssize_t Read(int fd, std::span<uint8_t> buf) {
         while (true) {
-            ssize_t res = ::read(fd, buf.data(), buf.size());
+            ssize_t res = ::recv(fd, buf.data(), buf.size(), 0);
 
             if (res == -1 && errno == EINTR)
                 continue;
@@ -20,7 +21,7 @@ namespace {
 
     ssize_t Write(int fd, std::span<uint8_t> buf) {
         while (true) {
-            ssize_t res = ::write(fd, buf.data(), buf.size());
+            ssize_t res = ::send(fd, buf.data(), buf.size(), MSG_NOSIGNAL);
 
             if (res == -1 && errno == EINTR)
                 continue;
