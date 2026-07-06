@@ -43,9 +43,11 @@ add_executable(
 
     tests/SocketIOTests.cpp
     tests/ProtocolIOTests.cpp
+    tests/PacketIOTests.cpp
 
     src/shared/io/SocketIO.cpp
     src/shared/io/ProtocolIO.cpp
+    src/shared/io/PacketIO.cpp
 )
 
 target_include_directories(

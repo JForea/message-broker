@@ -1,5 +1,6 @@
 #include "SocketIOTests.hpp"
 #include "ProtocolIOTests.hpp"
+#include "PacketIOTests.hpp"
 
 #include <csignal>
 
@@ -20,5 +21,10 @@ int main() {
 
     // PROTOCOL IO TESTS
     TestProtocolReadWrite();
+
+    // PACKET IO TESTS
+    TestPacketRegister();
+    TestPacketSendMessage();
+    TestPacketServerMessage();
 
 }
