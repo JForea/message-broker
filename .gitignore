@@ -4,3 +4,4 @@
 
 # CMake Build
 out/
+build/
