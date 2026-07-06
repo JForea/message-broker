@@ -27,6 +27,7 @@ target_include_directories(
     message-broker-client
     PUBLIC
         ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/src
 )
 
 # TESTING
