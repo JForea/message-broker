@@ -9,11 +9,15 @@
 
 namespace {
 
+    bool ShouldRetry(ssize_t result) {
+        return result == -1 && errno == EINTR;
+    }
+
     ssize_t Read(int fd, std::span<uint8_t> buf) {
         while (true) {
-            ssize_t res = ::recv(fd, buf.data(), buf.size(), 0);
+            ssize_t res = recv(fd, buf.data(), buf.size(), 0);
 
-            if (res == -1 && errno == EINTR)
+            if (ShouldRetry(res))
                 continue;
 
             return res;
@@ -22,9 +26,9 @@ namespace {
 
     ssize_t Write(int fd, std::span<const uint8_t> buf) {
         while (true) {
-            ssize_t res = ::send(fd, buf.data(), buf.size(), MSG_NOSIGNAL);
+            ssize_t res = send(fd, buf.data(), buf.size(), MSG_NOSIGNAL);
 
-            if (res == -1 && errno == EINTR)
+            if (ShouldRetry(res))
                 continue;
 
             return res;
@@ -63,17 +67,28 @@ namespace {
         }
     };
 
-    ssize_t MoveBatch(int fromFd, int toFd, const Pipeline& pipeline, uint32_t maxBytes) {
-        ssize_t movedToPipe = 0;
-
-        do {
-            movedToPipe = splice(
-                fromFd, nullptr,
-                pipeline.WriteEnd(), nullptr,
-                maxBytes,
+    ssize_t Splice(int fromFd, int toFd, uint32_t size) {
+        while (true) {
+            ssize_t res = splice(
+                fromFd, nullptr, 
+                toFd, nullptr, 
+                size, 
                 0
             );
-        } while (movedToPipe == -1 && errno == EINTR);
+
+            if (ShouldRetry(res))
+                continue;
+
+            return res;
+        }
+    }
+
+    ssize_t MoveBatch(int fromFd, int toFd, const Pipeline& pipeline, uint32_t maxBytes) {
+        ssize_t movedToPipe = Splice(
+            fromFd, 
+            pipeline.WriteEnd(), 
+            maxBytes
+        );
         
         if (movedToPipe <= 0)
             return movedToPipe;
@@ -81,15 +96,11 @@ namespace {
         ssize_t movedToTarget = 0;
 
         while (movedToTarget < movedToPipe) {
-            ssize_t moved = splice(
-                pipeline.ReadEnd(), nullptr,
-                toFd, nullptr,
-                movedToPipe - movedToTarget,
-                0
+            ssize_t moved = Splice(
+                pipeline.ReadEnd(),
+                toFd,
+                movedToPipe - movedToTarget
             );
-
-            if (moved == -1 && errno == EINTR)
-                continue;
 
             if (moved <= 0)
                 return moved;
@@ -161,5 +172,5 @@ namespace message_broker {
             bytesLeft -= moved;
         }
     }
-
+    
 }
