@@ -7,8 +7,11 @@ int main() {
 
     // SOCKET IO TESTS
     TestReadWrite();
+    TestSplice();
     TestReadFromClosedSocket();
     TestWriteIntoClosedSocket();
+    TestSpliceFromClosedSocket();
+    TestSpliceIncompletePayload();
 
     // PROTOCOL IO TESTS
     TestProtocolReadWrite();
