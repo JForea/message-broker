@@ -50,6 +50,40 @@ void TestSplice() {
     close(target[1]);
 }
 
+void TestTee() {
+    int source[2];
+    int target1[2];
+    int target2[2];
+
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, source) == 0);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, target1) == 0);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, target2) == 0);
+
+    std::array<std::uint8_t, 4> input { 0, 1, 2, 3 };
+    std::array<std::uint8_t, 4> output1 {};
+    std::array<std::uint8_t, 4> output2 {};
+
+    message_broker::WriteExact(source[0], input);
+
+    std::vector<int> targets{target1[0], target2[0]};
+    auto failed = message_broker::TeeExact(source[1], targets, input.size());
+
+    assert(failed.empty());
+
+    message_broker::ReadExact(target1[1], output1);
+    message_broker::ReadExact(target2[1], output2);
+
+    assert(output1 == input);
+    assert(output2 == input);
+
+    close(source[0]);
+    close(source[1]);
+    close(target1[0]);
+    close(target1[1]);
+    close(target2[0]);
+    close(target2[1]);
+}
+
 void TestReadFromClosedSocket() {
     int fds[2];
 
@@ -148,4 +182,35 @@ void TestSpliceIncompletePayload() {
     close(source[1]);
     close(target[0]);
     close(target[1]);
+}
+
+void TestTeeWithFailedTarget() {
+    int source[2];
+    int goodTarget[2];
+    int badTarget[2];
+
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, source) == 0);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, goodTarget) == 0);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, badTarget) == 0);
+
+    std::array<std::uint8_t, 4> input { 0, 1, 2, 3 };
+    std::array<std::uint8_t, 4> output {};
+
+    message_broker::WriteExact(source[0], input);
+
+    close(badTarget[1]);
+
+    std::vector<int> targets{goodTarget[0], badTarget[0]};
+    auto failed = message_broker::TeeExact(source[1], targets, input.size());
+
+    assert(failed.contains(badTarget[0]));
+
+    message_broker::ReadExact(goodTarget[1], output);
+    assert(output == input);
+
+    close(source[0]);
+    close(source[1]);
+    close(goodTarget[0]);
+    close(goodTarget[1]);
+    close(badTarget[0]);
 }
