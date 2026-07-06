@@ -14,4 +14,8 @@ namespace message_broker {
     // Throws if a write error occurs.
     void WriteExact(int fd, std::span<const uint8_t> buf);
 
+    // Sends exactly size bytes from one socket to another using splice().
+    // Throws if the connection is closed or a read error occurs.
+    void SpliceExact(int fromFd, int toFd, uint32_t size);
+
 }

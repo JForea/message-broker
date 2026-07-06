@@ -2,6 +2,7 @@
 
 #include <sys/socket.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include <cerrno>
 #include <stdexcept>
@@ -28,6 +29,75 @@ namespace {
 
             return res;
         } 
+    }
+
+    class Pipeline {
+    private:
+        int _readEnd;
+        int _writeEnd;
+    
+    public:
+        Pipeline() {
+            int pipeFds[2];
+            if (pipe(pipeFds) == -1)
+                throw std::runtime_error("Pipe creation failed.");
+
+            _readEnd = pipeFds[0];
+            _writeEnd = pipeFds[1];
+        }
+
+        Pipeline(const Pipeline&) = delete;
+        Pipeline& operator=(const Pipeline&) = delete;
+
+        int ReadEnd() const {
+            return _readEnd;
+        }
+
+        int WriteEnd() const {
+            return _writeEnd;
+        }
+
+        ~Pipeline() {
+            close(_readEnd);
+            close(_writeEnd);
+        }
+    };
+
+    ssize_t MoveBatch(int fromFd, int toFd, const Pipeline& pipeline, uint32_t maxBytes) {
+        ssize_t movedToPipe = 0;
+
+        do {
+            movedToPipe = splice(
+                fromFd, nullptr,
+                pipeline.WriteEnd(), nullptr,
+                maxBytes,
+                0
+            );
+        } while (movedToPipe == -1 && errno == EINTR);
+        
+        if (movedToPipe <= 0)
+            return movedToPipe;
+
+        ssize_t movedToTarget = 0;
+
+        while (movedToTarget < movedToPipe) {
+            ssize_t moved = splice(
+                pipeline.ReadEnd(), nullptr,
+                toFd, nullptr,
+                movedToPipe - movedToTarget,
+                0
+            );
+
+            if (moved == -1 && errno == EINTR)
+                continue;
+
+            if (moved <= 0)
+                return moved;
+
+            movedToTarget += moved;
+        }
+
+        return movedToPipe;
     }
 
 }
@@ -65,6 +135,30 @@ namespace message_broker {
                 throw std::runtime_error("Socket write failed.");
 
             readTotally += res;
+        }
+    }
+
+    void SpliceExact(int fromFd, int toFd, uint32_t size) {        
+        // splice() cannot transfer data directly between two sockets.
+        // Therefore an intermediate pipe is required.
+        Pipeline pipeline {};
+
+        uint32_t bytesLeft = size;
+
+        while (bytesLeft > 0) {
+            ssize_t moved = MoveBatch(
+                fromFd, toFd,
+                pipeline,
+                bytesLeft
+            );
+
+            if (moved == 0)
+                throw std::runtime_error("Socket closed while splicing.");
+
+            if (moved < 0)
+                throw std::runtime_error("Splice failed.");
+
+            bytesLeft -= moved;
         }
     }
 
