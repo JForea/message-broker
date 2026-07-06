@@ -1,8 +1,6 @@
 #include "PacketIO.hpp"
 #include "SocketIO.hpp"
-#include "shared/exceptions/ProtocolException.hpp"
-
-#include <stdexcept>
+#include "shared/Exceptions.hpp"
 
 namespace {
 
@@ -23,7 +21,7 @@ namespace message_broker {
 
     void ClientPacketWriter::WriteSendMessage(const Guid& targetGuid, std::span<const uint8_t> payload) {
         if (IsPayloadSizeInvalid(payload.size()))
-            throw std::invalid_argument("Too large payload size.");
+            throw PayloadTooLargeException();
 
         _protocolWriter.WritePacketType(PacketType::SendMessage);
         _protocolWriter.WriteGuid(targetGuid);
@@ -33,7 +31,7 @@ namespace message_broker {
 
     void ClientPacketWriter::WriteBroadcast(std::span<const uint8_t> payload) {
         if (IsPayloadSizeInvalid(payload.size()))
-            throw std::invalid_argument("Too large payload size.");
+            throw PayloadTooLargeException();
 
         _protocolWriter.WritePacketType(PacketType::Broadcast);
         _protocolWriter.WritePayloadSize(payload.size());
@@ -90,10 +88,7 @@ namespace message_broker {
         uint32_t payloadSize = _protocolReader.ReadPayloadSize();
 
         if (IsPayloadSizeInvalid(payloadSize))
-            throw ProtocolException(
-                ErrorCode::PayloadTooLarge,
-                "Too large payload size."
-            );
+            throw PayloadTooLargeException();
 
         return { guid, payloadSize };
     }
@@ -102,10 +97,7 @@ namespace message_broker {
         uint32_t payloadSize = _protocolReader.ReadPayloadSize();
 
         if (IsPayloadSizeInvalid(payloadSize))
-            throw ProtocolException(
-                ErrorCode::PayloadTooLarge,
-                "Too large payload size."
-            );
+            throw PayloadTooLargeException();
 
         return payloadSize;
     }
