@@ -12,6 +12,7 @@ add_library(
     src/client/BrokerClient.cpp
     src/shared/io/SocketIO.cpp
     src/shared/io/ProtocolIO.cpp
+    src/shared/io/PacketIO.cpp
 
     include/message_broker/IBrokerClient.hpp
     include/message_broker/ClientFactory.hpp
@@ -21,6 +22,8 @@ add_library(
     src/shared/Protocol.hpp
     src/shared/io/SocketIO.hpp
     src/shared/io/ProtocolIO.hpp
+    src/shared/io/PacketIO.hpp
+    src/shared/exceptions/ProtocolException.hpp
 )
 
 target_include_directories(

@@ -20,9 +20,6 @@ namespace message_broker {
         void WriteGuid(const Guid& guid);
         void WritePayloadSize(uint32_t size);
         void WritePayload(std::span<const uint8_t> payload);
-
-        template<typename T>
-        void Write(const T& value);
     };
 
     class ProtocolReader {

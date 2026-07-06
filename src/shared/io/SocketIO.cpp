@@ -9,7 +9,7 @@
 
 namespace {
 
-    bool ShouldRetry(ssize_t result) {
+    inline bool ShouldRetry(ssize_t result) {
         return result == -1 && errno == EINTR;
     }
 
