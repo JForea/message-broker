@@ -61,7 +61,7 @@ namespace {
             return _writeEnd;
         }
 
-        ~Pipeline() {
+        ~Pipeline() noexcept {
             close(_readEnd);
             close(_writeEnd);
         }
@@ -111,6 +111,99 @@ namespace {
         return movedToPipe;
     }
 
+    ssize_t Tee(int fromFd, int toFd, uint32_t size) {
+        while (true) {
+            ssize_t res = tee(
+                fromFd, toFd, 
+                size, 0
+            );
+
+            if (ShouldRetry(res))
+                continue;
+
+            return res;
+        }
+    }
+
+    ssize_t DrainPipeline(const Pipeline& pipeline, ssize_t size) {
+        Pipeline drainPipeline;
+
+        ssize_t drained = 0;
+
+        while (drained < size) {
+            ssize_t moved = Splice(
+                pipeline.ReadEnd(),
+                drainPipeline.WriteEnd(),
+                size - drained
+            );
+
+            if (moved <= 0)
+                return moved;
+
+            drained += moved;
+        }
+
+        return drained;
+    }
+
+    ssize_t BroadcastBatch(
+        int sourceFd,
+        const std::vector<int>& targetFds,
+        const Pipeline& sourcePipeline,
+        const std::vector<Pipeline>& targetPipelines,
+        uint32_t maxBytes,
+        std::unordered_set<int>& failedFds
+    ) {
+        ssize_t movedToSource = Splice(
+            sourceFd, 
+            sourcePipeline.WriteEnd(), 
+            maxBytes
+        );
+        
+        if (movedToSource <= 0)
+            return movedToSource;
+
+        for (int i = 0; i < targetFds.size(); ++i) {
+            if (failedFds.contains(targetFds[i]))
+                continue;
+
+            ssize_t copied = Tee(
+                sourcePipeline.ReadEnd(),
+                targetPipelines[i].WriteEnd(),
+                static_cast<uint32_t>(movedToSource)
+            );
+
+            if (copied != movedToSource) {
+                failedFds.emplace(targetFds[i]);
+                continue;
+            }
+
+            ssize_t movedToTargetFd = 0;
+
+            while (movedToTargetFd < copied) {
+                ssize_t moved = Splice(
+                    targetPipelines[i].ReadEnd(),
+                    targetFds[i],
+                    copied - movedToTargetFd
+                );
+
+                if (moved <= 0) {
+                    failedFds.emplace(targetFds[i]);
+                    break;
+                }
+
+                movedToTargetFd += moved;
+            }
+        }
+
+        ssize_t drained = DrainPipeline(sourcePipeline, movedToSource);
+
+        if (drained != movedToSource)
+            return -1;
+
+        return movedToSource;
+    }
+
 }
 
 namespace message_broker {
@@ -133,10 +226,10 @@ namespace message_broker {
     }
 
     void WriteExact(int fd, std::span<const uint8_t> buf) {
-        size_t readTotally = 0;
+        size_t writtenTotally = 0;
 
-        while (readTotally < buf.size()) {
-            auto chunk = buf.subspan(readTotally);
+        while (writtenTotally < buf.size()) {
+            auto chunk = buf.subspan(writtenTotally);
             ssize_t res = Write(fd, chunk);
             
             if (res == 0)
@@ -145,7 +238,7 @@ namespace message_broker {
             if (res < 0) 
                 throw std::runtime_error("Socket write failed.");
 
-            readTotally += res;
+            writtenTotally += res;
         }
     }
 
@@ -172,5 +265,40 @@ namespace message_broker {
             bytesLeft -= moved;
         }
     }
-    
+
+    // Best-effort function. Tries to send data to every target fd.
+    // Returns the fds that failed.
+    std::unordered_set<int> TeeExact(int fromFd, const std::vector<int>& toFds, uint32_t size) {
+        // tee() cannot transfer data directly from a source socket to multiple target sockets.
+        // Broadcasting is performed in three steps:
+        // 1. Use splice() to move data from the sender socket to the source pipe.
+        // 2. Use tee() to duplicate the data from the source pipe into each target pipe.
+        // 3. Use splice() again to move the data from each target pipe to its corresponding socket.
+        Pipeline source {};
+        std::vector<Pipeline> targets(toFds.size());
+
+        std::unordered_set<int> failedFds;
+
+        uint32_t bytesLeft = size;
+
+        while (bytesLeft > 0) {
+            ssize_t broadcasted = BroadcastBatch(
+                fromFd, toFds,
+                source, targets,
+                bytesLeft,
+                failedFds
+            );
+
+            if (broadcasted == 0)
+                throw std::runtime_error("Socket closed while splicing.");
+
+            if (broadcasted < 0)
+                throw std::runtime_error("Splice failed.");
+
+            bytesLeft -= broadcasted;
+        }
+
+        return failedFds;
+    }
+
 }

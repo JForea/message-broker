@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <span>
+#include <vector>
+#include <unordered_set>
 #include <cstdint>
 
 namespace message_broker {
@@ -17,5 +19,9 @@ namespace message_broker {
     // Sends exactly size bytes from one socket to another using splice().
     // Throws if the connection is closed or a read error occurs.
     void SpliceExact(int fromFd, int toFd, uint32_t size);
+
+    // Sends exactly size bytes from one socket to every other listed in toFds.
+    // Throws if the connection is closed or a read error occurs.
+    std::unordered_set<int> TeeExact(int fromFd, const std::vector<int>& toFds, uint32_t size);
 
 }
