@@ -29,6 +29,7 @@ add_executable(
     src/server/main.cpp
     src/server/ClientRegistry.cpp
     src/server/ServerSocket.cpp
+    src/server/BrokerServer.cpp
 )
 
 target_link_libraries(
