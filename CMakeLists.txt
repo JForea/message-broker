@@ -4,33 +4,49 @@ project(message-broker)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# SHARED LIBRARY
+
+add_library(
+    message-broker-shared STATIC
+    src/shared/io/SocketIO.cpp
+    src/shared/io/ProtocolIO.cpp
+    src/shared/io/PacketIO.cpp
+)
+
+target_include_directories(
+    message-broker-shared
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+# SERVER EXECUTABLE
+
+add_executable(
+    message-broker-server
+    src/server/main.cpp
+    src/server/ClientRegistry.cpp
+)
+
+target_link_libraries(
+    message-broker-server
+    PRIVATE
+        message-broker-shared
+)
 
 # CLIENT LIBRARY
 
 add_library(
     message-broker-client STATIC
     src/client/BrokerClient.cpp
-    src/shared/io/SocketIO.cpp
-    src/shared/io/ProtocolIO.cpp
-    src/shared/io/PacketIO.cpp
-
-    include/message_broker/IBrokerClient.hpp
-    include/message_broker/ClientFactory.hpp
-    include/message_broker/Guid.hpp
-    include/message_broker/Message.hpp
-
-    src/shared/Protocol.hpp
-    src/shared/io/SocketIO.hpp
-    src/shared/io/ProtocolIO.hpp
-    src/shared/io/PacketIO.hpp
-    src/shared/exceptions/ProtocolException.hpp
 )
 
-target_include_directories(
+target_link_libraries(
     message-broker-client
-    PUBLIC
-        ${PROJECT_SOURCE_DIR}/include
-        ${PROJECT_SOURCE_DIR}/src
+    PRIVATE
+        message-broker-shared
 )
 
 # TESTING
@@ -40,21 +56,15 @@ enable_testing()
 add_executable(
     message-broker-tests
     tests/main.cpp
-
     tests/SocketIOTests.cpp
     tests/ProtocolIOTests.cpp
     tests/PacketIOTests.cpp
-
-    src/shared/io/SocketIO.cpp
-    src/shared/io/ProtocolIO.cpp
-    src/shared/io/PacketIO.cpp
 )
 
-target_include_directories(
+target_link_libraries(
     message-broker-tests
     PRIVATE
-        ${PROJECT_SOURCE_DIR}/src
-        ${PROJECT_SOURCE_DIR}/include
+        message-broker-shared
 )
 
 target_compile_features(
