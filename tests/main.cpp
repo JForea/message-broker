@@ -1,6 +1,7 @@
 #include "SocketIOTests.hpp"
 #include "ProtocolIOTests.hpp"
 #include "PacketIOTests.hpp"
+#include "BrokerServerTests.hpp"
 
 #include <csignal>
 
@@ -26,5 +27,9 @@ int main() {
     TestPacketRegister();
     TestPacketSendMessage();
     TestPacketServerMessage();
+
+    // BROKERSERVER TESTS
+    TestBrokerServerStart();
+    TestBrokerServerAccept();
 
 }
