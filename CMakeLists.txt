@@ -58,10 +58,16 @@ enable_testing()
 add_executable(
     message-broker-tests
     tests/main.cpp
+
     tests/SocketIOTests.cpp
     tests/ProtocolIOTests.cpp
     tests/PacketIOTests.cpp
     tests/ServerSocketTests.cpp
+    tests/BrokerServerTests.cpp
+
+    src/server/ServerSocket.cpp
+    src/server/ClientRegistry.cpp
+    src/server/BrokerServer.cpp
 )
 
 target_link_libraries(
