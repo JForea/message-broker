@@ -93,12 +93,14 @@ namespace message_broker {
 
         int targetFd = targetFdOpt.value();
 
-        ServerPacketWriter writer(targetFd);        
-        
-        writer.WriteMessageHeader(senderGuidOpt.value(), header.payloadSize);
+        try {
+            ServerPacketWriter writer(targetFd);        
+            writer.WriteMessageHeader(senderGuidOpt.value(), header.payloadSize);
 
-        // TODO: handle error during splicing
-        SpliceExact(fd, targetFd, header.payloadSize);
+            SpliceExact(fd, targetFd, header.payloadSize);
+        } catch (const std::runtime_error&) {
+            DisconnectClient(targetFd);
+        }
     }
 
     void BrokerServer::HandleBroadcast(int fd, ServerPacketReader& reader) {
@@ -116,8 +118,10 @@ namespace message_broker {
             writer.WriteMessageHeader(senderGuidOpt.value(), payloadSize);
         }
 
-        // TODO: handle errors during teeing
-        TeeExact(fd, targetFds, payloadSize);
+        auto failedFds = TeeExact(fd, targetFds, payloadSize);
+
+        for (int failedFd : failedFds)
+            DisconnectClient(failedFd);
     }
 
     void BrokerServer::AddToEpoll(int fd) {
