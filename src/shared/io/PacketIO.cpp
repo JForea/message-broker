@@ -93,7 +93,7 @@ namespace message_broker {
         return { guid, payloadSize };
     }
     
-    uint32_t ServerPacketReader::ReadBroadcastHead() {
+    uint32_t ServerPacketReader::ReadBroadcastHeader() {
         uint32_t payloadSize = _protocolReader.ReadPayloadSize();
 
         if (IsPayloadSizeInvalid(payloadSize))

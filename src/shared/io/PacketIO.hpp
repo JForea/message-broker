@@ -60,7 +60,7 @@ namespace message_broker {
 
         Guid ReadRegister();
         SendMessageHeader ReadSendMessageHeader();
-        uint32_t ReadBroadcastHead();
+        uint32_t ReadBroadcastHeader();
     };
 
 }
