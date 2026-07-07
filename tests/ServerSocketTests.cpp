@@ -1,5 +1,5 @@
-#include "BrokerServerTests.hpp"
-#include "server/BrokerServer.hpp"
+#include "ServerSocketTests.hpp"
+#include "server/ServerSocket.hpp"
 
 #include <cassert>
 #include <filesystem>
@@ -9,24 +9,24 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-void TestBrokerServerStart() {
+void TestServerSocketStart() {
     auto SocketPath = "/tmp/test.sock";
 
     std::filesystem::remove(SocketPath);
 
-    message_broker::BrokerServer server(SocketPath);
+    message_broker::ServerSocket server(SocketPath);
 
     assert(std::filesystem::exists(SocketPath));
 
     std::filesystem::remove(SocketPath);
 }
 
-void TestBrokerServerAccept() {
+void TestServerSocketAccept() {
     constexpr auto SocketPath = "/tmp/test.sock";
 
     std::filesystem::remove(SocketPath);
 
-    message_broker::BrokerServer server(SocketPath);
+    message_broker::ServerSocket server(SocketPath);
 
     auto future = std::async(std::launch::async, [&] {
         return server.Accept();

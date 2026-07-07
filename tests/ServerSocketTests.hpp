@@ -1,0 +1,2 @@
+void TestServerSocketStart();
+void TestServerSocketAccept();

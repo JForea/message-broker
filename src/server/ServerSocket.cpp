@@ -1,4 +1,4 @@
-#include "BrokerServer.hpp"
+#include "ServerSocket.hpp"
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -9,7 +9,7 @@
 
 namespace message_broker {
     
-    BrokerServer::BrokerServer(std::string_view socketPath) {
+    ServerSocket::ServerSocket(std::string_view socketPath) {
         _serverFd = socket(AF_UNIX, SOCK_STREAM, 0);
         if (_serverFd == -1)
             throw std::runtime_error("Failed to start server. Couldn't create server socket.");
@@ -31,7 +31,7 @@ namespace message_broker {
             throw std::runtime_error("Failed to listen on server socket.");
     }
 
-    int BrokerServer::Accept() {
+    int ServerSocket::Accept() {
         int clientFd = accept(_serverFd, nullptr, nullptr);
         if (clientFd == -1)
             throw std::runtime_error("Failed to accept client connection.");
@@ -39,7 +39,7 @@ namespace message_broker {
         return clientFd;
     }
 
-    BrokerServer::~BrokerServer() noexcept {
+    ServerSocket::~ServerSocket() noexcept {
         if (_serverFd != -1)
             close(_serverFd);
     }

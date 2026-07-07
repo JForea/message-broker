@@ -4,16 +4,16 @@
 
 namespace message_broker {
 
-    class BrokerServer {
+    class ServerSocket {
     private:
         int _serverFd = -1;
 
     public:
-        explicit BrokerServer(std::string_view socketPath);
+        explicit ServerSocket(std::string_view socketPath);
 
         int Accept();
 
-        ~BrokerServer() noexcept;
+        ~ServerSocket() noexcept;
     };
 
 }

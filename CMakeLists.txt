@@ -28,7 +28,7 @@ add_executable(
     message-broker-server
     src/server/main.cpp
     src/server/ClientRegistry.cpp
-    src/server/BrokerServer.cpp
+    src/server/ServerSocket.cpp
 )
 
 target_link_libraries(
@@ -60,9 +60,7 @@ add_executable(
     tests/SocketIOTests.cpp
     tests/ProtocolIOTests.cpp
     tests/PacketIOTests.cpp
-    tests/BrokerServerTests.cpp
-
-    src/server/BrokerServer.cpp
+    tests/ServerSocketTests.cpp
 )
 
 target_link_libraries(
