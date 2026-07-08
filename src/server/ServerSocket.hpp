@@ -11,7 +11,7 @@ namespace message_broker {
     public:
         explicit ServerSocket(std::string_view socketPath);
 
-        int GetFd() const {
+        int GetFd() const noexcept {
             return _fd;
         }
 

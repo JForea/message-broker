@@ -43,6 +43,7 @@ target_link_libraries(
 add_library(
     message-broker-client STATIC
     src/client/BrokerClient.cpp
+    src/client/ClientSocket.cpp
 )
 
 target_link_libraries(
