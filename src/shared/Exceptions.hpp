@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <stdexcept>
 
 #include "Protocol.hpp"
 
@@ -55,5 +56,26 @@ namespace message_broker {
             "Payload is too large."
         ) {}
     };
+
+    [[noreturn]]
+    inline void ThrowProtocolException(ErrorCode code) {
+        switch (code)
+        {
+        case ErrorCode::InvalidPacket:
+            throw InvalidPacketException();
+
+        case ErrorCode::OccupiedId:
+            throw OccupiedIdException();
+
+        case ErrorCode::PayloadTooLarge:
+            throw PayloadTooLargeException();
+
+        case ErrorCode::UnknownTargetId:
+            throw UnknownTargetIdException();
+        
+        default:
+            throw std::runtime_error("Unknown error code.");
+        }
+    }
 
 }
