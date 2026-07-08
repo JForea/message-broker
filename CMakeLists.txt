@@ -65,10 +65,14 @@ add_executable(
     tests/PacketIOTests.cpp
     tests/ServerSocketTests.cpp
     tests/BrokerServerTests.cpp
+    tests/BrokerClientTests.cpp
 
     src/server/ServerSocket.cpp
     src/server/ClientRegistry.cpp
     src/server/BrokerServer.cpp
+    
+    src/client/BrokerClient.cpp
+    src/client/ClientSocket.cpp
 )
 
 target_link_libraries(

@@ -3,6 +3,7 @@
 #include "PacketIOTests.hpp"
 #include "ServerSocketTests.hpp"
 #include "BrokerServerTests.hpp"
+#include "BrokerClientTests.hpp"
 
 #include <csignal>
 
@@ -35,5 +36,8 @@ int main() {
 
     // BROKERSERVER TESTS
     TestBrokerServerRegister();
+
+    // CLIENTSERVER TESTS
+    TestBrokerClientRegister();
 
 }
