@@ -21,6 +21,8 @@ namespace message_broker {
     public:
         explicit BrokerClient(const Guid& guid);
 
+        explicit BrokerClient(const Guid& guid, std::string_view socketPath);
+
         const Guid& GetClientId() const noexcept override {
             return _guid;
         }

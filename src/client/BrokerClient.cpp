@@ -4,11 +4,22 @@
 
 #include <message_broker/Exceptions.hpp>
 
+#include "shared/Defaults.hpp"
+
 namespace message_broker {
     
     BrokerClient::BrokerClient(const Guid& guid) :
             _guid(guid),
-            _socket(ClientSocket("/tmp/message-broker.sock")),
+            _socket(ClientSocket(DefaultSocketPath)),
+            _reader(ClientPacketReader(_socket.GetFd())),
+            _writer(ClientPacketWriter(_socket.GetFd())) 
+    {
+        Register();
+    }
+
+    BrokerClient::BrokerClient(const Guid& guid, std::string_view socketPath) :
+            _guid(guid),
+            _socket(ClientSocket(socketPath)),
             _reader(ClientPacketReader(_socket.GetFd())),
             _writer(ClientPacketWriter(_socket.GetFd())) 
     {
