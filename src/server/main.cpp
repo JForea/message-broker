@@ -1,12 +1,20 @@
 #include <csignal>
+#include <iostream>
 
 #include "BrokerServer.hpp"
 
-int main() {
+#include "shared/Defaults.hpp"
+
+int main(int argc, char* argv[]) {
     // Prevent SIGPIPE when writing to a socket closed by the peer.
     // Socket write errors will be reported via errno instead. 
     std::signal(SIGPIPE, SIG_IGN);
 
-    message_broker::BrokerServer server("/tmp/message-broker.sock");
+    std::string_view socketPath = message_broker::DefaultSocketPath;
+
+    if (argc >= 2)
+        socketPath = argv[1];
+
+    message_broker::BrokerServer server(socketPath);
     server.Run();
 }
