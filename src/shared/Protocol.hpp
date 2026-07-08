@@ -22,13 +22,6 @@ namespace message_broker {
         Message = 0x82
     };
 
-    enum class ErrorCode : uint8_t {
-        OccupiedId = 0x00,
-        UnknownTargetId = 0x01,
-        InvalidPacket = 0x02,
-        PayloadTooLarge = 0x03
-    };
-
     inline constexpr uint32_t MaxPayloadSize = 4 * 1024 * 1024;
 
 }

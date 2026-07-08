@@ -1,7 +1,8 @@
 #include "BrokerServer.hpp"
 
 #include "shared/io/SocketIO.hpp"
-#include "shared/Exceptions.hpp"
+
+#include <message_broker/Exceptions.hpp>
 
 #include <unistd.h>
 #include <sys/epoll.h>

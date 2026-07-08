@@ -1,7 +1,9 @@
 #pragma once
 
-#include <message_broker/Guid.hpp>
 #include "shared/Protocol.hpp"
+
+#include <message_broker/Guid.hpp>
+#include <message_broker/ErrorCode.hpp>
 
 #include <cstdint>
 #include <span>

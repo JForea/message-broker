@@ -3,7 +3,7 @@
 #include <string>
 #include <stdexcept>
 
-#include "Protocol.hpp"
+#include <message_broker/ErrorCode.hpp>
 
 namespace message_broker {
 

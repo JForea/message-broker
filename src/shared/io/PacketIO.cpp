@@ -1,6 +1,7 @@
 #include "PacketIO.hpp"
 #include "SocketIO.hpp"
-#include "shared/Exceptions.hpp"
+
+#include <message_broker/Exceptions.hpp>
 
 namespace {
 

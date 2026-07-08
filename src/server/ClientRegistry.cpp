@@ -1,6 +1,6 @@
 #include "ClientRegistry.hpp"
 
-#include "shared/Exceptions.hpp"
+#include <message_broker/Exceptions.hpp>
 
 namespace message_broker {
     
