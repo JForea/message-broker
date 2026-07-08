@@ -5,6 +5,8 @@
 namespace message_broker {
     
     void ClientRegistry::Add(int fd, const Guid& guid) {
+        std::unique_lock lock(_mutex);
+
         if (_byFd.contains(fd) || _byGuid.contains(guid))
             throw OccupiedIdException();
 
@@ -13,6 +15,8 @@ namespace message_broker {
     }
 
     void ClientRegistry::Remove(int fd) {
+        std::unique_lock lock(_mutex);
+
         auto it = _byFd.find(fd);
         
         if (it == _byFd.end())
@@ -25,6 +29,8 @@ namespace message_broker {
     }
 
     std::shared_ptr<ClientConnection> ClientRegistry::FindByGuid(const Guid& guid) const {
+        std::shared_lock lock(_mutex);
+        
         auto it = _byGuid.find(guid);
 
         if (it == _byGuid.end())
@@ -34,6 +40,8 @@ namespace message_broker {
     }
 
     std::shared_ptr<ClientConnection> ClientRegistry::FindByFd(int fd) const {
+        std::shared_lock lock(_mutex);
+
         auto it = _byFd.find(fd);
 
         if (it == _byFd.end())
@@ -43,6 +51,8 @@ namespace message_broker {
     }
 
     std::vector<std::shared_ptr<ClientConnection>> ClientRegistry::GetBroadcastTargets(int senderFd) const {
+        std::shared_lock lock(_mutex);
+        
         std::vector<std::shared_ptr<ClientConnection>> broadcastTargets;
 
         for (const auto& [_, conn] : _byFd) {

@@ -5,6 +5,7 @@
 #include <optional>
 #include <vector>
 #include <memory>
+#include <shared_mutex>
 
 #include "ClientConnection.hpp"
 
@@ -12,6 +13,8 @@ namespace message_broker {
     
     class ClientRegistry {
     private:
+        mutable std::shared_mutex _mutex;
+
         std::unordered_map<int, std::shared_ptr<ClientConnection>> _byFd;
         std::map<Guid, std::shared_ptr<ClientConnection>> _byGuid;
 
