@@ -59,8 +59,7 @@ namespace message_broker {
 
     [[noreturn]]
     inline void ThrowProtocolException(ErrorCode code) {
-        switch (code)
-        {
+        switch (code) {
         case ErrorCode::InvalidPacket:
             throw InvalidPacketException();
 
@@ -77,5 +76,10 @@ namespace message_broker {
             throw std::runtime_error("Unknown error code.");
         }
     }
+
+    class ConnectionException : public std::runtime_error {
+    public:
+        using std::runtime_error::runtime_error;
+    };
 
 }

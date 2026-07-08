@@ -7,12 +7,11 @@
 namespace message_broker {
 
 	class IBrokerClient {
-
 	public:
-		virtual const Guid& GetClientId() = 0;
+		virtual const Guid& GetClientId() const noexcept = 0;
 
 		// Get file descriptor of the created socket.
-		virtual int GetSocketFd() = 0;
+		virtual int GetSocketFd() const noexcept = 0;
 		
 		virtual void SendMessage(const Guid& targetId, std::span<const uint8_t> data) = 0;
 
