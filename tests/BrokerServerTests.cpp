@@ -48,23 +48,26 @@ void TestBrokerServerRegister() {
         server.Run();
     });
 
-    serverThread.detach();
-
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     int clientFd = ConnectToServer();
 
     message_broker::Guid guid{0, 1, 2};
 
-    message_broker::ClientPacketWriter writer(clientFd);
-    message_broker::ClientPacketReader reader(clientFd);
+    {
+        message_broker::ClientPacketWriter writer(clientFd);
+        message_broker::ClientPacketReader reader(clientFd);
 
-    writer.WriteRegister(guid);
+        writer.WriteRegister(guid);
 
-    auto packetType = reader.ReadPacketType();
-
-    assert(packetType == message_broker::PacketType::Ack);
+        auto packetType = reader.ReadPacketType();
+        assert(packetType == message_broker::PacketType::Ack);
+    }
 
     close(clientFd);
+
+    server.Stop();
+    serverThread.join();
+
     std::filesystem::remove(SocketPath);
 }

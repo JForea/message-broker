@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "ServerSocket.hpp"
 #include "ClientRegistry.hpp"
 
@@ -12,6 +14,7 @@ namespace message_broker {
         ServerSocket _socket;
         ClientRegistry _clients;
         int _epollFd = -1;
+        std::atomic_bool _running { false };
 
         std::optional<int> AcceptClient();
         void HandleClientPacket(int fd);
@@ -27,6 +30,8 @@ namespace message_broker {
         explicit BrokerServer(std::string_view socketPath);
         
         void Run();
+
+        void Stop() noexcept;
 
         ~BrokerServer() noexcept;
     };

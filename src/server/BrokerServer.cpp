@@ -127,7 +127,7 @@ namespace message_broker {
 
     void BrokerServer::AddToEpoll(int fd) {
         epoll_event event {};
-        event.events = EPOLLIN;
+        event.events = EPOLLIN | EPOLLRDHUP;
         event.data.fd = fd;
 
         if (epoll_ctl(_epollFd, EPOLL_CTL_ADD, fd, &event) == -1)
@@ -135,8 +135,10 @@ namespace message_broker {
     }
 
     void BrokerServer::RemoveFromEpoll(int fd) {
-        if (::epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, nullptr) == -1)
-            throw std::runtime_error("Failed to remove file descriptor from epoll.");
+        if (_epollFd == -1)
+            return;
+
+        epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, nullptr);
     }
 
     void BrokerServer::DisconnectClient(int fd) {
@@ -146,22 +148,33 @@ namespace message_broker {
     }
 
     void BrokerServer::Run() {
+        _running.store(true);
         const int maxEventsSize = 64;
         
-        while (true) {
+        while (_running.load()) {
             epoll_event events[maxEventsSize];
 
-            int count = epoll_wait(_epollFd, events, maxEventsSize, -1);
+            int count = epoll_wait(_epollFd, events, maxEventsSize, 100);
 
             if (count == -1) {
                 if (errno == EINTR)
                     continue;
+
+                if (!_running && errno == EBADF)
+                    return;
 
                 throw std::runtime_error("epoll_wait failed.");
             }
 
             for (int i = 0; i < count; ++i) {
                 int fd = events[i].data.fd;
+
+                if (events[i].events & (EPOLLHUP | EPOLLERR | EPOLLRDHUP)) {
+                    if (fd != _socket.GetFd())
+                        DisconnectClient(fd);
+
+                    continue;
+                }
 
                 if (fd == _socket.GetFd()) {
                     auto clientFd = AcceptClient();
@@ -179,12 +192,16 @@ namespace message_broker {
                             DisconnectClient(fd);
                         }
                     } catch (const std::runtime_error&) {
-                        // Close connection only if IO error has occured.
+                        // Close connection only if IO error has occurred.
                         DisconnectClient(fd);
                     }
                 }
             }
         }
+    }
+
+    void BrokerServer::Stop() noexcept {
+        _running.store(false);
     }
 
 }
