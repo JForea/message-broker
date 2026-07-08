@@ -5,49 +5,49 @@
 namespace message_broker {
     
     void ClientRegistry::Add(int fd, const Guid& guid) {
-        if (_guidByFd.contains(fd) || _fdByGuid.contains(guid))
+        if (_byFd.contains(fd) || _byGuid.contains(guid))
             throw OccupiedIdException();
 
-        _guidByFd.emplace(fd, guid);
-        _fdByGuid.emplace(guid, fd);
+        _byFd.emplace(fd, std::make_shared<ClientConnection>(fd, guid));
+        _byGuid.emplace(guid, std::make_shared<ClientConnection>(fd, guid));
     }
 
     void ClientRegistry::Remove(int fd) {
-        auto it = _guidByFd.find(fd);
+        auto it = _byFd.find(fd);
         
-        if (it == _guidByFd.end())
+        if (it == _byFd.end())
             return;
 
-        Guid guid = it->second;
+        Guid guid = it->second->guid;
 
-        _fdByGuid.erase(guid);
-        _guidByFd.erase(fd);
+        _byGuid.erase(guid);
+        _byFd.erase(fd);
     }
 
-    std::optional<int> ClientRegistry::FindFdByGuid(const Guid& guid) const {
-        auto it = _fdByGuid.find(guid);
+    std::shared_ptr<ClientConnection> ClientRegistry::FindByGuid(const Guid& guid) const {
+        auto it = _byGuid.find(guid);
 
-        if (it == _fdByGuid.end())
-            return std::nullopt;
+        if (it == _byGuid.end())
+            return nullptr;
 
         return it->second;
     }
 
-    std::optional<Guid> ClientRegistry::FindGuidByFd(int fd) const {
-        auto it = _guidByFd.find(fd);
+    std::shared_ptr<ClientConnection> ClientRegistry::FindByFd(int fd) const {
+        auto it = _byFd.find(fd);
 
-        if (it == _guidByFd.end())
-            return std::nullopt;
+        if (it == _byFd.end())
+            return nullptr;
 
         return it->second;
     }
 
-    std::vector<int> ClientRegistry::GetBroadcastTargets(int senderFd) const {
-        std::vector<int> broadcastTargets;
+    std::vector<std::shared_ptr<ClientConnection>> ClientRegistry::GetBroadcastTargets(int senderFd) const {
+        std::vector<std::shared_ptr<ClientConnection>> broadcastTargets;
 
-        for (const auto& [fd, _] : _guidByFd) {
-            if (fd != senderFd)
-                broadcastTargets.push_back(fd);
+        for (const auto& [_, conn] : _byFd) {
+            if (conn->fd != senderFd)
+                broadcastTargets.push_back(conn);
         }
 
         return broadcastTargets;

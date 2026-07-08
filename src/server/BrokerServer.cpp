@@ -9,6 +9,23 @@
 
 #include <cerrno>
 #include <stdexcept>
+#include <algorithm>
+
+namespace {
+
+    std::vector<int> GetTargetFds(
+        const std::vector<std::shared_ptr<message_broker::ClientConnection>>& connections
+    ) {
+        std::vector<int> targetFds;
+        targetFds.reserve(connections.size());
+
+        for (const auto& connection : connections)
+            targetFds.push_back(connection->fd);
+
+        return targetFds;
+    }
+
+}
 
 namespace message_broker {
 
@@ -84,19 +101,20 @@ namespace message_broker {
     void BrokerServer::HandleSendMessage(int fd, ServerPacketReader& reader) {
         SendMessageHeader header = reader.ReadSendMessageHeader();
 
-        auto senderGuidOpt = _clients.FindGuidByFd(fd);
-        if (!senderGuidOpt)
+        auto senderConnection = _clients.FindByFd(fd);
+        if (!senderConnection)
             throw std::runtime_error("Couldn't find sender GUID during SendMessage.");
 
-        auto targetFdOpt = _clients.FindFdByGuid(header.target);
-        if (!targetFdOpt)
+        auto targetConnection = _clients.FindByGuid(header.target);
+        if (!targetConnection)
             throw UnknownTargetIdException();
 
-        int targetFd = targetFdOpt.value();
+        std::lock_guard lock(targetConnection->writeMutex);
 
+        int targetFd = targetConnection->fd;
         try {
             ServerPacketWriter writer(targetFd);        
-            writer.WriteMessageHeader(senderGuidOpt.value(), header.payloadSize);
+            writer.WriteMessageHeader(senderConnection->guid, header.payloadSize);
 
             SpliceExact(fd, targetFd, header.payloadSize);
         } catch (const std::runtime_error&) {
@@ -107,16 +125,34 @@ namespace message_broker {
     void BrokerServer::HandleBroadcast(int fd, ServerPacketReader& reader) {
         uint32_t payloadSize = reader.ReadBroadcastHeader();
 
-        auto senderGuidOpt = _clients.FindGuidByFd(fd);
-        if (!senderGuidOpt)
+        auto senderConnection = _clients.FindByFd(fd);
+        if (!senderConnection)
             throw std::runtime_error("Couldn't find sender GUID during Broadcast.");
 
-        auto targetFds = _clients.GetBroadcastTargets(fd);
+        auto targetConnections = _clients.GetBroadcastTargets(fd);
 
-        for (auto targetFd : targetFds) {
-            ServerPacketWriter writer(targetFd);
+        // We lock multiple client write mutexes below.
+        // Always acquire them in the same order to avoid deadlocks between
+        // concurrent broadcasts with overlapping target sets.
+        std::sort(
+            targetConnections.begin(),
+            targetConnections.end(),
+            [](const auto& lhs, const auto& rhs) {
+                return lhs->fd < rhs->fd;
+            }
+        );
 
-            writer.WriteMessageHeader(senderGuidOpt.value(), payloadSize);
+        std::vector<std::unique_lock<std::mutex>> locks;
+        locks.reserve(targetConnections.size());
+
+        for (const auto& connection : targetConnections)
+            locks.emplace_back(connection->writeMutex);
+
+        std::vector<int> targetFds = GetTargetFds(targetConnections);
+
+        for (const auto& connection : targetConnections) {
+            ServerPacketWriter writer(connection->fd);
+            writer.WriteMessageHeader(senderConnection->guid, payloadSize);
         }
 
         auto failedFds = TeeExact(fd, targetFds, payloadSize);
