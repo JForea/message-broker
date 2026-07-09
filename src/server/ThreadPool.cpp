@@ -1,5 +1,7 @@
 #include "ThreadPool.hpp"
 
+#include <iostream>
+
 namespace message_broker {
 
     ThreadPool::ThreadPool(size_t threadCount) {
@@ -33,7 +35,15 @@ namespace message_broker {
                 _tasks.pop();
             }
 
-            task();
+            // Prevent a task exception from terminating the worker thread.
+            // TODO: Add normal logger.
+            try {
+                task();
+            } catch (const std::exception& e) {
+                std::cerr << "ThreadPool task failed: " << e.what() << '\n';
+            } catch(...) {
+                std::cerr << "ThreadPool task failed: unknown exception\n";
+            }
         }
     }
 
