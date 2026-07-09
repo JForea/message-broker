@@ -30,6 +30,7 @@ add_executable(
     src/server/ClientRegistry.cpp
     src/server/ServerSocket.cpp
     src/server/BrokerServer.cpp
+    src/server/ThreadPool.cpp
 )
 
 target_link_libraries(
@@ -70,6 +71,7 @@ add_executable(
     src/server/ServerSocket.cpp
     src/server/ClientRegistry.cpp
     src/server/BrokerServer.cpp
+    src/server/ThreadPool.cpp
     
     src/client/BrokerClient.cpp
     src/client/ClientSocket.cpp

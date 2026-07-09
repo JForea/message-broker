@@ -29,7 +29,10 @@ namespace {
 
 namespace message_broker {
 
-    BrokerServer::BrokerServer(std::string_view socketPath) : _socket(socketPath) {
+    BrokerServer::BrokerServer(
+        std::string_view socketPath,
+        size_t threadCount
+    ) : _socket(socketPath), _threadPool(ThreadPool(threadCount)) {
         _epollFd = epoll_create1(EPOLL_CLOEXEC);
         if (_epollFd == -1)
             throw std::runtime_error("Failed to create epoll instance.");
@@ -60,6 +63,34 @@ namespace message_broker {
 
             return std::nullopt;
         }
+    }
+
+    void BrokerServer::HandleClientEvent(int fd) noexcept {
+        bool keepAlive = true;
+
+        try {
+            HandleClientPacket(fd);
+        } catch (const ProtocolException& e) {
+            try {
+                ServerPacketWriter writer(fd);
+                writer.WriteError(e.GetErrorCode());
+            } catch (const std::runtime_error&) {
+                keepAlive = false;
+            }
+        } catch (const std::runtime_error&) {
+            keepAlive = false;
+        }
+
+        if (keepAlive) {
+            try {
+                RearmClientInEpoll(fd);
+            } catch (const std::runtime_error&) {
+                keepAlive = false;
+            }
+        }
+
+        if (!keepAlive)
+            DisconnectClient(fd);
     }
 
     void BrokerServer::HandleClientPacket(int fd) {
@@ -251,14 +282,9 @@ namespace message_broker {
                         AddClientToEpoll(clientFd.value());
                 } else {
                     try {
-                        HandleClientPacket(fd);
-                    } catch (const ProtocolException& e) {
-                        try {
-                            ServerPacketWriter writer(fd);
-                            writer.WriteError(e.GetErrorCode());
-                        } catch (const std::runtime_error&) {
-                            DisconnectClient(fd);
-                        }
+                        _threadPool.Enqueue([this, fd] {
+                            HandleClientPacket(fd);
+                        });
                     } catch (const std::runtime_error&) {
                         // Close connection only if IO error has occurred.
                         DisconnectClient(fd);
