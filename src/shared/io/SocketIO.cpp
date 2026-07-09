@@ -1,5 +1,7 @@
 #include "SocketIO.hpp"
 
+#include "Pipeline.hpp"
+
 #include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -35,38 +37,6 @@ namespace {
         } 
     }
 
-    class Pipeline {
-    private:
-        int _readEnd;
-        int _writeEnd;
-    
-    public:
-        Pipeline() {
-            int pipeFds[2];
-            if (pipe(pipeFds) == -1)
-                throw std::runtime_error("Pipe creation failed.");
-
-            _readEnd = pipeFds[0];
-            _writeEnd = pipeFds[1];
-        }
-
-        Pipeline(const Pipeline&) = delete;
-        Pipeline& operator=(const Pipeline&) = delete;
-
-        int ReadEnd() const {
-            return _readEnd;
-        }
-
-        int WriteEnd() const {
-            return _writeEnd;
-        }
-
-        ~Pipeline() noexcept {
-            close(_readEnd);
-            close(_writeEnd);
-        }
-    };
-
     ssize_t Splice(int fromFd, int toFd, uint32_t size) {
         while (true) {
             ssize_t res = splice(
@@ -83,7 +53,11 @@ namespace {
         }
     }
 
-    ssize_t MoveBatch(int fromFd, int toFd, const Pipeline& pipeline, uint32_t maxBytes) {
+    ssize_t MoveBatch(
+        int fromFd, int toFd,
+        const message_broker::Pipeline& pipeline,
+        uint32_t maxBytes
+    ) {
         ssize_t movedToPipe = Splice(
             fromFd, 
             pipeline.WriteEnd(), 
@@ -125,8 +99,8 @@ namespace {
         }
     }
 
-    ssize_t DrainPipeline(const Pipeline& pipeline, ssize_t size) {
-        Pipeline drainPipeline;
+    ssize_t DrainPipeline(const message_broker::Pipeline& pipeline, ssize_t size) {
+        message_broker::Pipeline drainPipeline;
 
         ssize_t drained = 0;
 
@@ -149,8 +123,8 @@ namespace {
     ssize_t BroadcastBatch(
         int sourceFd,
         const std::vector<int>& targetFds,
-        const Pipeline& sourcePipeline,
-        const std::vector<Pipeline>& targetPipelines,
+        const message_broker::Pipeline& sourcePipeline,
+        const std::vector<message_broker::Pipeline>& targetPipelines,
         uint32_t maxBytes,
         std::unordered_set<int>& failedFds
     ) {
