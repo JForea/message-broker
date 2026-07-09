@@ -34,7 +34,7 @@ namespace message_broker {
         if (_epollFd == -1)
             throw std::runtime_error("Failed to create epoll instance.");
 
-        AddToEpoll(_socket.GetFd());
+        AddServerToEpoll();
     }
 
     BrokerServer::~BrokerServer() noexcept {
@@ -161,23 +161,55 @@ namespace message_broker {
             DisconnectClient(failedFd);
     }
 
-    void BrokerServer::AddToEpoll(int fd) {
-        epoll_event event {};
-        event.events = EPOLLIN | EPOLLRDHUP;
+    void BrokerServer::UpdateEpoll(
+        int fd,
+        int operation,
+        uint32_t events,
+        const char* errorMessage
+    ) {
+        epoll_event event{};
+        event.events = events;
         event.data.fd = fd;
 
-        if (epoll_ctl(_epollFd, EPOLL_CTL_ADD, fd, &event) == -1)
-            throw std::runtime_error("Failed to add file descriptor to epoll.");
+        if (epoll_ctl(_epollFd, operation, fd, &event) == -1)
+            throw std::runtime_error(errorMessage);
     }
 
-    void BrokerServer::RemoveFromEpoll(int fd) {
+    void BrokerServer::AddServerToEpoll() {
+        UpdateEpoll(
+            _socket.GetFd(),
+            EPOLL_CTL_ADD,
+            EPOLLIN,
+            "Failed to add server socket to epoll."
+        );
+    }
+
+    void BrokerServer::AddClientToEpoll(int fd) {
+        UpdateEpoll(
+            fd,
+            EPOLL_CTL_ADD,
+            EPOLLIN | EPOLLRDHUP | EPOLLONESHOT,
+            "Failed to add client socket to epoll."
+        );
+    }
+
+    void BrokerServer::RearmClientInEpoll(int fd) {
+        UpdateEpoll(
+            fd,
+            EPOLL_CTL_MOD,
+            EPOLLIN | EPOLLRDHUP | EPOLLONESHOT,
+            "Failed to rearm client socket in epoll."
+        );
+    }
+
+    void BrokerServer::RemoveFromEpoll(int fd) noexcept {
         if (_epollFd == -1)
             return;
 
         epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, nullptr);
     }
 
-    void BrokerServer::DisconnectClient(int fd) {
+    void BrokerServer::DisconnectClient(int fd) noexcept {
         RemoveFromEpoll(fd);
         _clients.Remove(fd);
         close(fd);
@@ -216,7 +248,7 @@ namespace message_broker {
                     auto clientFd = AcceptClient();
 
                     if (clientFd)
-                        AddToEpoll(clientFd.value());
+                        AddClientToEpoll(clientFd.value());
                 } else {
                     try {
                         HandleClientPacket(fd);

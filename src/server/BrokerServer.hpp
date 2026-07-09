@@ -22,9 +22,18 @@ namespace message_broker {
         void HandleSendMessage(int fd, ServerPacketReader& reader);
         void HandleBroadcast(int fd, ServerPacketReader& reader);
 
-        void AddToEpoll(int fd);
-        void RemoveFromEpoll(int fd);
-        void DisconnectClient(int fd);
+        void UpdateEpoll(
+            int fd,
+            int operation,
+            uint32_t events,
+            const char* errorMessage
+        );
+        void AddServerToEpoll();
+        void AddClientToEpoll(int fd);
+        void RearmClientInEpoll(int fd);
+        void RemoveFromEpoll(int fd) noexcept;
+
+        void DisconnectClient(int fd) noexcept;
 
     public:
         explicit BrokerServer(std::string_view socketPath);
