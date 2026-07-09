@@ -32,7 +32,7 @@ namespace message_broker {
     BrokerServer::BrokerServer(
         std::string_view socketPath,
         size_t threadCount
-    ) : _socket(socketPath), _threadPool(ThreadPool(threadCount)) {
+    ) : _socket(socketPath), _threadPool(threadCount) {
         _epollFd = epoll_create1(EPOLL_CLOEXEC);
         if (_epollFd == -1)
             throw std::runtime_error("Failed to create epoll instance.");
@@ -261,7 +261,7 @@ namespace message_broker {
                 if (errno == EINTR)
                     continue;
 
-                if (!_running && errno == EBADF)
+                if (!_running.load() && errno == EBADF)
                     return;
 
                 throw std::runtime_error("epoll_wait failed.");
@@ -285,7 +285,7 @@ namespace message_broker {
                 } else {
                     try {
                         _threadPool.Enqueue([this, fd] {
-                            HandleClientPacket(fd);
+                            HandleClientEvent(fd);
                         });
                     } catch (const std::runtime_error&) {
                         // Close connection only if IO error has occurred.
@@ -294,6 +294,8 @@ namespace message_broker {
                 }
             }
         }
+
+        _threadPool.Stop();
     }
 
     void BrokerServer::Stop() noexcept {
