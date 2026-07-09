@@ -20,7 +20,7 @@ namespace message_broker {
 
     public:
         void Add(int fd, const Guid& guid);
-        void Remove(int fd);
+        std::shared_ptr<ClientConnection> Remove(int fd);
 
         std::shared_ptr<ClientConnection> FindByFd(int fd) const;
         std::shared_ptr<ClientConnection> FindByGuid(const Guid& guid) const;

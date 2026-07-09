@@ -242,8 +242,10 @@ namespace message_broker {
 
     void BrokerServer::DisconnectClient(int fd) noexcept {
         RemoveFromEpoll(fd);
-        _clients.Remove(fd);
-        close(fd);
+
+        auto connection = _clients.Remove(fd);
+        if (connection)        
+            close(fd);
     }
 
     void BrokerServer::Run() {

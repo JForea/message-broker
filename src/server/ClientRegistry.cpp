@@ -14,18 +14,20 @@ namespace message_broker {
         _byGuid.emplace(guid, std::make_shared<ClientConnection>(fd, guid));
     }
 
-    void ClientRegistry::Remove(int fd) {
+    std::shared_ptr<ClientConnection> ClientRegistry::Remove(int fd) {
         std::unique_lock lock(_mutex);
 
         auto it = _byFd.find(fd);
         
         if (it == _byFd.end())
-            return;
+            return nullptr;
 
-        Guid guid = it->second->guid;
+        auto connection = it->second;
 
-        _byGuid.erase(guid);
+        _byGuid.erase(connection->guid);
         _byFd.erase(fd);
+
+        return connection;
     }
 
     std::shared_ptr<ClientConnection> ClientRegistry::FindByGuid(const Guid& guid) const {
