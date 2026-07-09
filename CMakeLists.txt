@@ -67,6 +67,7 @@ add_executable(
     tests/ServerSocketTests.cpp
     tests/BrokerServerTests.cpp
     tests/BrokerClientTests.cpp
+    tests/BrokerConcurrencyTests.cpp
 
     src/server/ServerSocket.cpp
     src/server/ClientRegistry.cpp
