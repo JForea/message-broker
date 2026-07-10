@@ -20,9 +20,9 @@ namespace {
         return result == -1 && errno == EINTR;
     }
 
-    ssize_t Read(int fd, std::span<uint8_t> buf, uint32_t size = 0) {
+    ssize_t Read(int fd, std::span<uint8_t> buf, uint32_t size) {
         while (true) {
-            ssize_t res = recv(fd, buf.data(), size == 0 ? buf.size() : size, 0);
+            ssize_t res = recv(fd, buf.data(), size, 0);
 
             if (ShouldRetry(res))
                 continue;
@@ -33,7 +33,7 @@ namespace {
 
     ssize_t Write(int fd, std::span<const uint8_t> buf, uint32_t size = 0) {
         while (true) {
-            ssize_t res = send(fd, buf.data(), size == 0 ? buf.size() : size, MSG_NOSIGNAL);
+            ssize_t res = send(fd, buf.data(), size, MSG_NOSIGNAL);
 
             if (ShouldRetry(res))
                 continue;
@@ -116,7 +116,7 @@ namespace message_broker {
 
         while (readTotally < size) {
             auto chunk = buf.subspan(readTotally);
-            ssize_t res = Read(fd, chunk, size);
+            ssize_t res = Read(fd, chunk, size - readTotally);
             
             if (res == 0)
                 throw std::runtime_error("Socket closed while reading.");
@@ -136,7 +136,7 @@ namespace message_broker {
 
         while (writtenTotally < size) {
             auto chunk = buf.subspan(writtenTotally);
-            ssize_t res = Write(fd, chunk, size);
+            ssize_t res = Write(fd, chunk, size - writtenTotally);
             
             if (res == 0)
                 throw std::runtime_error("Socket closed while writing.");

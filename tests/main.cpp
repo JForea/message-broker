@@ -16,12 +16,12 @@ int main() {
     // SOCKET IO TESTS
     TestReadWrite();
     TestSplice();
-    TestTee();
+    TestBroadcast();
+    TestBroadcastByBatches();
     TestReadFromClosedSocket();
     TestWriteIntoClosedSocket();
     TestSpliceFromClosedSocket();
     TestSpliceIncompletePayload();
-    TestTeeWithFailedTarget();
 
     // PROTOCOL IO TESTS
     TestProtocolReadWrite();

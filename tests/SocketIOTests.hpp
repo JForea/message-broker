@@ -1,8 +1,8 @@
 void TestReadWrite();
 void TestSplice();
-void TestTee();
+void TestBroadcast();
+void TestBroadcastByBatches();
 void TestReadFromClosedSocket();
 void TestWriteIntoClosedSocket();
 void TestSpliceFromClosedSocket(); 
 void TestSpliceIncompletePayload();
-void TestTeeWithFailedTarget();

@@ -12,6 +12,7 @@
 #include <span>
 #include <stdexcept>
 #include <vector>
+#include <thread>
 
 void TestReadWrite() {
     int fds[2];
@@ -62,7 +63,7 @@ void TestSplice() {
     close(target[1]);
 }
 
-void TestTee() {
+void TestBroadcast() {
     int source[2];
     int target1[2];
     int target2[2];
@@ -82,21 +83,10 @@ void TestTee() {
         target2[0]
     };
 
-    message_broker::Pipeline sourcePipeline;
-    message_broker::Pipeline targetPipeline1;
-    message_broker::Pipeline targetPipeline2;
-
-    std::vector<message_broker::Pipeline*> targetPipelines{
-        &targetPipeline1,
-        &targetPipeline2
-    };
-
-    auto failed = message_broker::TeeExact(
+    auto failed = message_broker::BroadcastExact(
         source[1],
         targetFds,
-        input.size(),
-        sourcePipeline,
-        targetPipelines
+        input.size()
     );
 
     assert(failed.empty());
@@ -104,6 +94,64 @@ void TestTee() {
     message_broker::ReadExact(target1[1], output1);
     message_broker::ReadExact(target2[1], output2);
 
+    assert(output1 == input);
+    assert(output2 == input);
+
+    close(source[0]);
+    close(source[1]);
+    close(target1[0]);
+    close(target1[1]);
+    close(target2[0]);
+    close(target2[1]);
+}
+
+void TestBroadcastByBatches() {
+    int source[2];
+    int target1[2];
+    int target2[2];
+
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, source) == 0);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, target1) == 0);
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, target2) == 0);
+
+    constexpr size_t InputSize =  1024 * 1024 + 1024;
+
+    std::array<std::uint8_t, InputSize> input;
+
+    for (int i = 0; i < InputSize; ++i)
+        input[i] = i % 256;
+
+    std::array<std::uint8_t, InputSize> output1{};
+    std::array<std::uint8_t, InputSize> output2{};
+
+    std::thread sourceThread([&source, &input] {
+        message_broker::WriteExact(source[0], input);
+    });
+
+    std::thread target1Thread([&target1, &output1] {
+        message_broker::ReadExact(target1[1], output1);
+    });
+    std::thread target2Thread([&target2, &output2] {
+        message_broker::ReadExact(target2[1], output2);
+    });
+
+    std::vector<int> targetFds{
+        target1[0],
+        target2[0]
+    };
+
+    auto failed = message_broker::BroadcastExact(
+        source[1],
+        targetFds,
+        input.size()
+    );
+
+    sourceThread.join();
+    target1Thread.join();
+    target2Thread.join();
+
+    assert(failed.empty());
+    
     assert(output1 == input);
     assert(output2 == input);
 
@@ -227,54 +275,4 @@ void TestSpliceIncompletePayload() {
     close(source[1]);
     close(target[0]);
     close(target[1]);
-}
-
-void TestTeeWithFailedTarget() {
-    int source[2];
-    int goodTarget[2];
-    int badTarget[2];
-
-    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, source) == 0);
-    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, goodTarget) == 0);
-    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, badTarget) == 0);
-
-    std::array<std::uint8_t, 4> input{0, 1, 2, 3};
-    std::array<std::uint8_t, 4> output{};
-
-    message_broker::WriteExact(source[0], input);
-
-    close(badTarget[1]);
-
-    std::vector<int> targetFds{
-        goodTarget[0],
-        badTarget[0]
-    };
-
-    message_broker::Pipeline sourcePipeline;
-    message_broker::Pipeline goodPipeline;
-    message_broker::Pipeline badPipeline;
-
-    std::vector<message_broker::Pipeline*> targetPipelines{
-        &goodPipeline,
-        &badPipeline
-    };
-
-    auto failed = message_broker::TeeExact(
-        source[1],
-        targetFds,
-        input.size(),
-        sourcePipeline,
-        targetPipelines
-    );
-
-    assert(failed.contains(badTarget[0]));
-
-    message_broker::ReadExact(goodTarget[1], output);
-    assert(output == input);
-
-    close(source[0]);
-    close(source[1]);
-    close(goodTarget[0]);
-    close(goodTarget[1]);
-    close(badTarget[0]);
 }
