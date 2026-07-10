@@ -14,13 +14,15 @@ namespace {
 
     using message_broker::Pipeline;
 
+    constexpr size_t BufferSize = 1024 * 1024;
+
     inline bool ShouldRetry(ssize_t result) {
         return result == -1 && errno == EINTR;
     }
 
-    ssize_t Read(int fd, std::span<uint8_t> buf) {
+    ssize_t Read(int fd, std::span<uint8_t> buf, uint32_t size = 0) {
         while (true) {
-            ssize_t res = recv(fd, buf.data(), buf.size(), 0);
+            ssize_t res = recv(fd, buf.data(), size == 0 ? buf.size() : size, 0);
 
             if (ShouldRetry(res))
                 continue;
@@ -29,9 +31,9 @@ namespace {
         }
     }
 
-    ssize_t Write(int fd, std::span<const uint8_t> buf) {
+    ssize_t Write(int fd, std::span<const uint8_t> buf, uint32_t size = 0) {
         while (true) {
-            ssize_t res = send(fd, buf.data(), buf.size(), MSG_NOSIGNAL);
+            ssize_t res = send(fd, buf.data(), size == 0 ? buf.size() : size, MSG_NOSIGNAL);
 
             if (ShouldRetry(res))
                 continue;
@@ -102,116 +104,19 @@ namespace {
         }
     }
 
-    ssize_t DrainPipeline(const Pipeline& pipeline, ssize_t size) {
-        Pipeline drainPipeline;
-
-        ssize_t drained = 0;
-
-        while (drained < size) {
-            ssize_t moved = Splice(
-                pipeline.ReadEnd(),
-                drainPipeline.WriteEnd(),
-                size - drained
-            );
-
-            if (moved <= 0)
-                return moved;
-
-            drained += moved;
-        }
-
-        return drained;
-    }
-
-    void BroadcastToBatch(
-        const Pipeline& source,
-        std::span<const int> targetFds,
-        std::span<Pipeline*> targetPipelines,
-        uint32_t size,
-        std::unordered_set<int>& failedFds
-    ) {
-        if (targetFds.size() != targetPipelines.size())
-            throw std::invalid_argument("TargetFd and pipeline counts must match.");
-
-        for (int i = 0; i < targetFds.size(); ++i) {
-            int targetFd = targetFds[i];
-
-            if (failedFds.contains(targetFd))
-                continue;
-
-            Pipeline& targetPipeline = *targetPipelines[i];
-
-            ssize_t copied = Tee(
-                source.ReadEnd(),
-                targetPipeline.WriteEnd(),
-                size
-            );
-
-            if (copied < 0) {
-                failedFds.insert(targetFd);
-                continue;
-            }
-
-            if (copied != static_cast<ssize_t>(size)) {
-                // tee() may have copied only part of the chunk.
-                // Remove that partial data before reusing the pipeline.
-                if (copied > 0) {
-                    ssize_t drained = DrainPipeline(targetPipeline, copied);
-
-                    if (drained != copied)
-                        throw std::runtime_error(
-                            "Failed to drain target pipeline after partial tee."
-                        );
-                }
-
-                failedFds.insert(targetFd);
-                continue;
-            }
-
-            ssize_t sent = 0;
-
-            while (sent < copied) {
-                ssize_t moved = Splice(
-                    targetPipeline.ReadEnd(),
-                    targetFd,
-                    static_cast<uint32_t>(copied - sent)
-                );
-
-                if (moved <= 0) {
-                    ssize_t remaining = copied - sent;
-
-                    if (remaining > 0) {
-                        ssize_t drained = DrainPipeline(
-                            targetPipeline,
-                            remaining
-                        );
-
-                        if (drained != remaining) {
-                            throw std::runtime_error(
-                                "Failed to drain target pipeline after splice failure."
-                            );
-                        }
-                    }
-
-                    failedFds.insert(targetFd);
-                    break;
-                }
-
-                sent += moved;
-            }
-        }
-    }
-
 }
 
 namespace message_broker {
 
-    void ReadExact(int fd, std::span<uint8_t> buf) {
+    void ReadExact(int fd, std::span<uint8_t> buf, uint32_t size) {
         size_t readTotally = 0;
 
-        while (readTotally < buf.size()) {
+        if (size == 0)
+            size = buf.size();
+
+        while (readTotally < size) {
             auto chunk = buf.subspan(readTotally);
-            ssize_t res = Read(fd, chunk);
+            ssize_t res = Read(fd, chunk, size);
             
             if (res == 0)
                 throw std::runtime_error("Socket closed while reading.");
@@ -223,12 +128,15 @@ namespace message_broker {
         }
     }
 
-    void WriteExact(int fd, std::span<const uint8_t> buf) {
+    void WriteExact(int fd, std::span<const uint8_t> buf, uint32_t size) {
         size_t writtenTotally = 0;
 
-        while (writtenTotally < buf.size()) {
+        if (size == 0)
+            size = buf.size();
+
+        while (writtenTotally < size) {
             auto chunk = buf.subspan(writtenTotally);
-            ssize_t res = Write(fd, chunk);
+            ssize_t res = Write(fd, chunk, size);
             
             if (res == 0)
                 throw std::runtime_error("Socket closed while writing.");
@@ -238,6 +146,36 @@ namespace message_broker {
 
             writtenTotally += res;
         }
+    }
+
+    std::unordered_set<int> BroadcastExact(int fromFd, std::vector<int> toFds, uint32_t payloadSize) {
+        std::unordered_set<int> badTargets;
+        
+        std::vector<uint8_t> buf(BufferSize);
+
+        size_t broadcastedTotally = 0;
+        while (broadcastedTotally < payloadSize) {
+            size_t batchSize = std::min(payloadSize - broadcastedTotally, BufferSize);
+            if (batchSize == 0)
+                break;
+
+            ReadExact(fromFd, buf, batchSize);
+
+            for (int fd : toFds) {
+                if (badTargets.contains(fd))
+                    continue;
+
+                try {
+                    WriteExact(fd, buf, batchSize);
+                } catch (...) {
+                    badTargets.emplace(fd);
+                }
+            }
+
+            broadcastedTotally += batchSize;
+        }
+
+        return badTargets;
     }
 
     // splice() cannot transfer data directly between two sockets.
@@ -260,56 +198,6 @@ namespace message_broker {
 
             bytesLeft -= moved;
         }
-    }
-
-    // Best-effort function. Tries to send data to every target fd.
-    // Returns the fds that failed.
-    std::unordered_set<int> TeeExact(
-        int fromFd, const std::vector<int>& toFds,
-        uint32_t size,
-        Pipeline& source,
-        std::vector<Pipeline*> targetPipelines
-    ) {
-        // tee() cannot transfer data directly from a source socket to multiple target sockets.
-        // Broadcasting is performed in three steps:
-        // 1. Use splice() to move data from the sender socket to the source pipe.
-        // 2. Use tee() to duplicate the data from the source pipe into each target pipe.
-        // 3. Use splice() again to move the data from each target pipe to its corresponding socket.
-        std::unordered_set<int> failedFds;
-
-        uint32_t bytesLeft = size;
-
-        while (bytesLeft > 0) {
-            ssize_t movedToSource = Splice(
-                fromFd,
-                source.WriteEnd(),
-                bytesLeft
-            );
-
-            for (int offset = 0; offset < toFds.size(); offset += targetPipelines.size()) {
-                size_t batchSize = std::min(
-                    targetPipelines.size(),
-                    toFds.size() - offset
-                );
-
-                BroadcastToBatch(
-                    source,
-                    std::span<const int>(toFds).subspan(offset, batchSize),
-                    std::span<Pipeline*>(targetPipelines).first(batchSize),
-                    movedToSource,
-                    failedFds
-                );
-            }
-
-            ssize_t drained = DrainPipeline(source, movedToSource);
-
-            if (drained != movedToSource)
-                throw std::runtime_error("Failed to drain source pipeline.");
-
-            bytesLeft -= movedToSource;
-        }
-
-        return failedFds;
     }
 
 }

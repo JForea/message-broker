@@ -201,12 +201,7 @@ namespace message_broker {
         for (std::size_t i = 1; i < pipeHandles.size(); ++i)
             targets.push_back(&pipeHandles[i].Get());
 
-        auto failedFds = TeeExact(
-            fd, targetFds, 
-            payloadSize,
-            source,
-            targets
-        );
+        auto failedFds = BroadcastExact(fd, targetFds, payloadSize);
 
         for (int failedFd : failedFds)
             DisconnectClient(failedFd);
