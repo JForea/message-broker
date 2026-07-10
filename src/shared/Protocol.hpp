@@ -22,6 +22,4 @@ namespace message_broker {
         Message = 0x82
     };
 
-    inline constexpr uint32_t MaxPayloadSize = 4 * 1024 * 1024;
-
 }

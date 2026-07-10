@@ -3,14 +3,6 @@
 
 #include <message_broker/Exceptions.hpp>
 
-namespace {
-
-    bool IsPayloadSizeInvalid(size_t payloadSize) {
-        return payloadSize > message_broker::MaxPayloadSize;
-    }
-
-}
-
 namespace message_broker {
 
     // ClientPacketWriter functions
@@ -21,9 +13,6 @@ namespace message_broker {
     }
 
     void ClientPacketWriter::WriteSendMessage(const Guid& targetGuid, std::span<const uint8_t> payload) {
-        if (IsPayloadSizeInvalid(payload.size()))
-            throw PayloadTooLargeException();
-
         _protocolWriter.WritePacketType(PacketType::SendMessage);
         _protocolWriter.WriteGuid(targetGuid);
         _protocolWriter.WritePayloadSize(payload.size());
@@ -31,9 +20,6 @@ namespace message_broker {
     }
 
     void ClientPacketWriter::WriteBroadcast(std::span<const uint8_t> payload) {
-        if (IsPayloadSizeInvalid(payload.size()))
-            throw PayloadTooLargeException();
-
         _protocolWriter.WritePacketType(PacketType::Broadcast);
         _protocolWriter.WritePayloadSize(payload.size());
         _protocolWriter.WritePayload(payload);
@@ -88,18 +74,12 @@ namespace message_broker {
         Guid guid = _protocolReader.ReadGuid();
         uint32_t payloadSize = _protocolReader.ReadPayloadSize();
 
-        if (IsPayloadSizeInvalid(payloadSize))
-            throw PayloadTooLargeException();
-
         return { guid, payloadSize };
     }
     
     uint32_t ServerPacketReader::ReadBroadcastHeader() {
         uint32_t payloadSize = _protocolReader.ReadPayloadSize();
-
-        if (IsPayloadSizeInvalid(payloadSize))
-            throw PayloadTooLargeException();
-
+        
         return payloadSize;
     }
 

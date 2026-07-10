@@ -49,14 +49,6 @@ namespace message_broker {
         ) {}
     };
 
-    class PayloadTooLargeException : public ProtocolException {
-    public:
-        PayloadTooLargeException() : ProtocolException(
-            ErrorCode::PayloadTooLarge,
-            "Payload is too large."
-        ) {}
-    };
-
     [[noreturn]]
     inline void ThrowProtocolException(ErrorCode code) {
         switch (code) {
@@ -65,9 +57,6 @@ namespace message_broker {
 
         case ErrorCode::OccupiedId:
             throw OccupiedIdException();
-
-        case ErrorCode::PayloadTooLarge:
-            throw PayloadTooLargeException();
 
         case ErrorCode::UnknownTargetId:
             throw UnknownTargetIdException();
