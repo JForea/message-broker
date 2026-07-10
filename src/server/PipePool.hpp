@@ -36,6 +36,7 @@ namespace message_broker {
     private:
         std::mutex _mutex;
         std::condition_variable _condition;
+        size_t _capacity;
 
         std::vector<std::unique_ptr<Pipeline>> _availablePipelines;
         bool _stopping = false;
@@ -49,6 +50,7 @@ namespace message_broker {
         PipePool& operator=(const PipePool&) = delete;
 
         PipeHandle Acquire();
+        std::vector<PipeHandle> AcquireMany(size_t count);
 
         void Stop() noexcept;
     };

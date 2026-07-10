@@ -5,6 +5,7 @@
 #include "ServerSocket.hpp"
 #include "ClientRegistry.hpp"
 #include "ThreadPool.hpp"
+#include "PipePool.hpp"
 
 #include "shared/io/PacketIO.hpp"
 
@@ -15,6 +16,7 @@ namespace message_broker {
         ServerSocket _socket;
         ClientRegistry _clients;
         ThreadPool _threadPool;
+        PipePool _pipePool;
         int _epollFd = -1;
         std::atomic_bool _running { false };
 
@@ -41,7 +43,8 @@ namespace message_broker {
     public:
         explicit BrokerServer(
             std::string_view socketPath,
-            size_t threadCount = 4
+            size_t threadCount = 4,
+            size_t pipeCount = 8
         );
         
         void Run();

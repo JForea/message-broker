@@ -31,8 +31,9 @@ namespace message_broker {
 
     BrokerServer::BrokerServer(
         std::string_view socketPath,
-        size_t threadCount
-    ) : _socket(socketPath), _threadPool(threadCount) {
+        size_t threadCount,
+        size_t pipeCount
+    ) : _socket(socketPath), _threadPool(threadCount), _pipePool(pipeCount) {
         _epollFd = epoll_create1(EPOLL_CLOEXEC);
         if (_epollFd == -1)
             throw std::runtime_error("Failed to create epoll instance.");
@@ -147,7 +148,9 @@ namespace message_broker {
             ServerPacketWriter writer(targetFd);        
             writer.WriteMessageHeader(senderConnection->guid, header.payloadSize);
 
-            SpliceExact(fd, targetFd, header.payloadSize);
+            auto pipeHandle = _pipePool.Acquire();
+
+            SpliceExact(fd, targetFd, header.payloadSize, pipeHandle.Get());
         } catch (const std::runtime_error&) {
             DisconnectClient(targetFd);
         }
@@ -186,7 +189,24 @@ namespace message_broker {
             writer.WriteMessageHeader(senderConnection->guid, payloadSize);
         }
 
-        auto failedFds = TeeExact(fd, targetFds, payloadSize);
+        size_t targetCount = targetFds.size();
+
+        auto pipeHandles = _pipePool.AcquireMany(targetCount + 1);
+
+        Pipeline& source = pipeHandles[0].Get();
+
+        std::vector<Pipeline*> targets;
+        targets.reserve(targetCount);
+
+        for (std::size_t i = 1; i < pipeHandles.size(); ++i)
+            targets.push_back(&pipeHandles[i].Get());
+
+        auto failedFds = TeeExact(
+            fd, targetFds, 
+            payloadSize,
+            source,
+            targets
+        );
 
         for (int failedFd : failedFds)
             DisconnectClient(failedFd);
@@ -296,6 +316,7 @@ namespace message_broker {
         }
 
         _threadPool.Stop();
+        _pipePool.Stop();
     }
 
     void BrokerServer::Stop() noexcept {
