@@ -5,7 +5,6 @@
 #include "ServerSocket.hpp"
 #include "ClientRegistry.hpp"
 #include "ThreadPool.hpp"
-#include "PipePool.hpp"
 
 #include "shared/io/PacketIO.hpp"
 
@@ -16,15 +15,14 @@ namespace message_broker {
         ServerSocket _socket;
         ClientRegistry _clients;
         ThreadPool _threadPool;
-        PipePool _pipePool;
         int _epollFd = -1;
         std::atomic_bool _running { false };
 
         std::optional<int> AcceptClient();
-        void HandleClientEvent(int fd) noexcept;
-        void HandleClientPacket(int fd);
+        void HandleClientEvent(int fd, const Pipeline& pipeline) noexcept;
+        void HandleClientPacket(int fd, const Pipeline& pipeline);
         void HandleRegister(int fd);
-        void HandleSendMessage(int fd, ServerPacketReader& reader);
+        void HandleSendMessage(int fd, ServerPacketReader& reader, const Pipeline& pipeline);
         void HandleBroadcast(int fd, ServerPacketReader& reader);
 
         void UpdateEpoll(
@@ -41,11 +39,7 @@ namespace message_broker {
         void DisconnectClient(int fd) noexcept;
 
     public:
-        explicit BrokerServer(
-            std::string_view socketPath,
-            size_t threadCount = 4,
-            size_t pipeCount = 8
-        );
+        explicit BrokerServer(std::string_view socketPath);
         
         void Run();
 

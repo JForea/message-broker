@@ -2,24 +2,29 @@
 
 #include <iostream>
 
+namespace {
+
+    constexpr uint16_t MaxTasksPerWorker = 10;
+
+}
+
 namespace message_broker {
 
-    ThreadPool::ThreadPool(size_t threadCount) {
-        if (threadCount == 0)
-            throw std::invalid_argument("Thread pool size must be greater than zero.");
+    ThreadPool::ThreadPool() {
+        AddWorker();
+    }
 
-        _workers.reserve(threadCount);
-
-        for (size_t i = 0; i < threadCount; ++i) {
-            _workers.emplace_back([this] {
-                WorkerLoop();
-            });
-        }
+    void ThreadPool::AddWorker() {
+        _workers.emplace_back(std::thread([this] {
+            WorkerLoop();
+        }));
     }
 
     void ThreadPool::WorkerLoop() {
+        Pipeline pipeline;
+
         while (true) {
-            std::function<void()> task;
+            std::function<void(const Pipeline&)> task;
 
             {
                 std::unique_lock lock(_mutex);
@@ -38,7 +43,7 @@ namespace message_broker {
             // Prevent a task exception from terminating the worker thread.
             // TODO: Add normal logger.
             try {
-                task();
+                task(pipeline);
             } catch (const std::exception& e) {
                 std::cerr << "ThreadPool task failed: " << e.what() << '\n';
             } catch(...) {
@@ -47,7 +52,7 @@ namespace message_broker {
         }
     }
 
-    void ThreadPool::Enqueue(std::function<void()> task) {
+    void ThreadPool::Enqueue(std::function<void(const Pipeline&)> task) {
         {
             std::lock_guard lock(_mutex);
 
@@ -55,6 +60,9 @@ namespace message_broker {
                 throw std::runtime_error("Cannot enqueue task into stopped thread pool.");
 
             _tasks.push(std::move(task));
+
+            if (_tasks.size() >= _workers.size() * MaxTasksPerWorker)
+                AddWorker();
         }
 
         _condition.notify_one();

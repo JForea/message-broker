@@ -12,9 +12,6 @@ int main(int argc, char* argv[]) {
 
     std::string_view socketPath = message_broker::DefaultSocketPath;
     
-    // TODO: Add reading threadCount as a parameter when starting server.
-    constexpr size_t threadCount = 4;
-
     if (argc > 2) {
         std::cerr << "Usage: message-broker-server [socket-path]\n";
         return 1;
@@ -23,6 +20,6 @@ int main(int argc, char* argv[]) {
     if (argc == 2)
         socketPath = argv[1];
 
-    message_broker::BrokerServer server(socketPath, threadCount);
+    message_broker::BrokerServer server(socketPath);
     server.Run();
 }

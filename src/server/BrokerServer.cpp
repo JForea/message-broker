@@ -29,11 +29,7 @@ namespace {
 
 namespace message_broker {
 
-    BrokerServer::BrokerServer(
-        std::string_view socketPath,
-        size_t threadCount,
-        size_t pipeCount
-    ) : _socket(socketPath), _threadPool(threadCount), _pipePool(pipeCount) {
+    BrokerServer::BrokerServer(std::string_view socketPath) : _socket(socketPath) {
         _epollFd = epoll_create1(EPOLL_CLOEXEC);
         if (_epollFd == -1)
             throw std::runtime_error("Failed to create epoll instance.");
@@ -66,11 +62,11 @@ namespace message_broker {
         }
     }
 
-    void BrokerServer::HandleClientEvent(int fd) noexcept {
+    void BrokerServer::HandleClientEvent(int fd, const Pipeline& pipeline) noexcept {
         bool keepAlive = true;
 
         try {
-            HandleClientPacket(fd);
+            HandleClientPacket(fd, pipeline);
         } catch (const ProtocolException& e) {
             try {
                 ServerPacketWriter writer(fd);
@@ -94,14 +90,14 @@ namespace message_broker {
             DisconnectClient(fd);
     }
 
-    void BrokerServer::HandleClientPacket(int fd) {
+    void BrokerServer::HandleClientPacket(int fd, const Pipeline& pipeline) {
         ServerPacketReader reader(fd);
 
         PacketType type = reader.ReadPacketType();
 
         switch (type) {
         case PacketType::SendMessage:
-            HandleSendMessage(fd, reader);
+            HandleSendMessage(fd, reader, pipeline);
             break;
 
         case PacketType::Broadcast:
@@ -130,7 +126,7 @@ namespace message_broker {
         writer.WriteAck();
     }
 
-    void BrokerServer::HandleSendMessage(int fd, ServerPacketReader& reader) {
+    void BrokerServer::HandleSendMessage(int fd, ServerPacketReader& reader, const Pipeline& pipeline) {
         SendMessageHeader header = reader.ReadSendMessageHeader();
 
         auto senderConnection = _clients.FindByFd(fd);
@@ -148,9 +144,7 @@ namespace message_broker {
             ServerPacketWriter writer(targetFd);        
             writer.WriteMessageHeader(senderConnection->guid, header.payloadSize);
 
-            auto pipeHandle = _pipePool.Acquire();
-
-            SpliceExact(fd, targetFd, header.payloadSize, pipeHandle.Get());
+            SpliceExact(fd, targetFd, header.payloadSize, pipeline);
         } catch (const std::runtime_error&) {
             DisconnectClient(targetFd);
         }
@@ -190,16 +184,6 @@ namespace message_broker {
         }
 
         size_t targetCount = targetFds.size();
-
-        auto pipeHandles = _pipePool.AcquireMany(targetCount + 1);
-
-        Pipeline& source = pipeHandles[0].Get();
-
-        std::vector<Pipeline*> targets;
-        targets.reserve(targetCount);
-
-        for (std::size_t i = 1; i < pipeHandles.size(); ++i)
-            targets.push_back(&pipeHandles[i].Get());
 
         auto failedFds = BroadcastExact(fd, targetFds, payloadSize);
 
@@ -299,8 +283,8 @@ namespace message_broker {
                         AddClientToEpoll(clientFd.value());
                 } else {
                     try {
-                        _threadPool.Enqueue([this, fd] {
-                            HandleClientEvent(fd);
+                        _threadPool.Enqueue([this, fd] (const Pipeline& pipeline) {
+                            HandleClientEvent(fd, pipeline);
                         });
                     } catch (const std::runtime_error&) {
                         // Close connection only if IO error has occurred.
@@ -311,7 +295,6 @@ namespace message_broker {
         }
 
         _threadPool.Stop();
-        _pipePool.Stop();
     }
 
     void BrokerServer::Stop() noexcept {
