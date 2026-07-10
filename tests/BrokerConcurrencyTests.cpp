@@ -24,7 +24,7 @@ namespace {
 void TestConcurrentClientRegistration() {
     std::filesystem::remove(SocketPath);
 
-    message_broker::BrokerServer server(SocketPath, 4);
+    message_broker::BrokerServer server(SocketPath);
 
     std::thread serverThread([&server] {
         server.Run();
@@ -63,7 +63,7 @@ void TestConcurrentClientRegistration() {
 void TestConcurrentSendMessagesToSameTarget() {
     std::filesystem::remove(SocketPath);
 
-    message_broker::BrokerServer server(SocketPath, 4);
+    message_broker::BrokerServer server(SocketPath);
 
     std::thread serverThread([&server] {
         server.Run();
@@ -130,7 +130,7 @@ void TestConcurrentSendMessagesToSameTarget() {
 void TestConcurrentBroadcastsDoNotDeadlock() {
     std::filesystem::remove(SocketPath);
 
-    message_broker::BrokerServer server(SocketPath, 4);
+    message_broker::BrokerServer server(SocketPath);
 
     std::thread serverThread([&server] {
         server.Run();
