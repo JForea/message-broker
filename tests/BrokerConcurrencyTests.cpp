@@ -2,9 +2,8 @@
 
 #include "server/BrokerServer.hpp"
 #include "shared/io/PacketIO.hpp"
-#include "client/BrokerClient.hpp"
 
-#include <message_broker/Guid.hpp>
+#include <message_broker/BrokerClient.hpp>
 
 #include <sys/socket.h>
 #include <sys/un.h>

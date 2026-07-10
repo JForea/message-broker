@@ -1,8 +1,8 @@
 #include "BrokerClientTests.hpp"
 
-#include "client/BrokerClient.hpp"
 #include "server/BrokerServer.hpp"
 
+#include <message_broker/BrokerClient.hpp>
 #include <message_broker/Guid.hpp>
 
 #include <cassert>
