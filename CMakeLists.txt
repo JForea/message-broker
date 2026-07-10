@@ -30,6 +30,8 @@ add_executable(
     src/server/ClientRegistry.cpp
     src/server/ServerSocket.cpp
     src/server/BrokerServer.cpp
+    src/server/ThreadPool.cpp
+    src/server/PipePool.cpp
 )
 
 target_link_libraries(
@@ -66,10 +68,13 @@ add_executable(
     tests/ServerSocketTests.cpp
     tests/BrokerServerTests.cpp
     tests/BrokerClientTests.cpp
+    tests/BrokerConcurrencyTests.cpp
 
     src/server/ServerSocket.cpp
     src/server/ClientRegistry.cpp
     src/server/BrokerServer.cpp
+    src/server/ThreadPool.cpp
+    src/server/PipePool.cpp
     
     src/client/BrokerClient.cpp
     src/client/ClientSocket.cpp

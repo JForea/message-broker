@@ -4,6 +4,8 @@
 
 #include "ServerSocket.hpp"
 #include "ClientRegistry.hpp"
+#include "ThreadPool.hpp"
+#include "PipePool.hpp"
 
 #include "shared/io/PacketIO.hpp"
 
@@ -13,21 +15,37 @@ namespace message_broker {
     private:
         ServerSocket _socket;
         ClientRegistry _clients;
+        ThreadPool _threadPool;
+        PipePool _pipePool;
         int _epollFd = -1;
         std::atomic_bool _running { false };
 
         std::optional<int> AcceptClient();
+        void HandleClientEvent(int fd) noexcept;
         void HandleClientPacket(int fd);
         void HandleRegister(int fd);
         void HandleSendMessage(int fd, ServerPacketReader& reader);
         void HandleBroadcast(int fd, ServerPacketReader& reader);
 
-        void AddToEpoll(int fd);
-        void RemoveFromEpoll(int fd);
-        void DisconnectClient(int fd);
+        void UpdateEpoll(
+            int fd,
+            int operation,
+            uint32_t events,
+            const char* errorMessage
+        );
+        void AddServerToEpoll();
+        void AddClientToEpoll(int fd);
+        void RearmClientInEpoll(int fd);
+        void RemoveFromEpoll(int fd) noexcept;
+
+        void DisconnectClient(int fd) noexcept;
 
     public:
-        explicit BrokerServer(std::string_view socketPath);
+        explicit BrokerServer(
+            std::string_view socketPath,
+            size_t threadCount = 4,
+            size_t pipeCount = 8
+        );
         
         void Run();
 

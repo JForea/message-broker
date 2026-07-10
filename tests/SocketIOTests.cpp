@@ -1,3 +1,6 @@
+#include "SocketIOTests.hpp"
+
+#include "shared/io/Pipeline.hpp"
 #include "shared/io/SocketIO.hpp"
 
 #include <sys/socket.h>
@@ -6,7 +9,9 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <span>
 #include <stdexcept>
+#include <vector>
 
 void TestReadWrite() {
     int fds[2];
@@ -30,15 +35,22 @@ void TestSplice() {
     int source[2];
     int target[2];
 
-    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, source) == 0);
-    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, target) == 0);
+    assert(::socketpair(AF_UNIX, SOCK_STREAM, 0, source) == 0);
+    assert(::socketpair(AF_UNIX, SOCK_STREAM, 0, target) == 0);
 
-    std::array<std::uint8_t, 4> input { 0, 1, 2, 3 };
-    std::array<std::uint8_t, 4> output {};
+    std::array<std::uint8_t, 4> input{0, 1, 2, 3};
+    std::array<std::uint8_t, 4> output{};
 
     message_broker::WriteExact(source[0], input);
 
-    message_broker::SpliceExact(source[1], target[0], input.size());
+    message_broker::Pipeline pipeline;
+
+    message_broker::SpliceExact(
+        source[1],
+        target[0],
+        input.size(),
+        pipeline
+    );
 
     message_broker::ReadExact(target[1], output);
 
@@ -59,14 +71,33 @@ void TestTee() {
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, target1) == 0);
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, target2) == 0);
 
-    std::array<std::uint8_t, 4> input { 0, 1, 2, 3 };
-    std::array<std::uint8_t, 4> output1 {};
-    std::array<std::uint8_t, 4> output2 {};
+    std::array<std::uint8_t, 4> input{0, 1, 2, 3};
+    std::array<std::uint8_t, 4> output1{};
+    std::array<std::uint8_t, 4> output2{};
 
     message_broker::WriteExact(source[0], input);
 
-    std::vector<int> targets{target1[0], target2[0]};
-    auto failed = message_broker::TeeExact(source[1], targets, input.size());
+    std::vector<int> targetFds{
+        target1[0],
+        target2[0]
+    };
+
+    message_broker::Pipeline sourcePipeline;
+    message_broker::Pipeline targetPipeline1;
+    message_broker::Pipeline targetPipeline2;
+
+    std::vector<message_broker::Pipeline*> targetPipelines{
+        &targetPipeline1,
+        &targetPipeline2
+    };
+
+    auto failed = message_broker::TeeExact(
+        source[1],
+        targetFds,
+        input.size(),
+        sourcePipeline,
+        targetPipelines
+    );
 
     assert(failed.empty());
 
@@ -141,10 +172,17 @@ void TestSpliceFromClosedSocket() {
 
     close(source[0]);
 
+    message_broker::Pipeline pipeline;
+
     bool error = false;
 
     try {
-        message_broker::SpliceExact(source[1], target[0], 4);
+        message_broker::SpliceExact(
+            source[1],
+            target[0],
+            4,
+            pipeline
+        );
     } catch (const std::runtime_error&) {
         error = true;
     }
@@ -169,10 +207,17 @@ void TestSpliceIncompletePayload() {
     message_broker::WriteExact(source[0], input);
     close(source[0]);
 
+    message_broker::Pipeline pipeline;
+
     bool error = false;
 
     try {
-        message_broker::SpliceExact(source[1], target[0], 5);
+        message_broker::SpliceExact(
+            source[1],
+            target[0],
+            5,
+            pipeline
+        );
     } catch (const std::runtime_error&) {
         error = true;
     }
@@ -193,15 +238,34 @@ void TestTeeWithFailedTarget() {
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, goodTarget) == 0);
     assert(socketpair(AF_UNIX, SOCK_STREAM, 0, badTarget) == 0);
 
-    std::array<std::uint8_t, 4> input { 0, 1, 2, 3 };
-    std::array<std::uint8_t, 4> output {};
+    std::array<std::uint8_t, 4> input{0, 1, 2, 3};
+    std::array<std::uint8_t, 4> output{};
 
     message_broker::WriteExact(source[0], input);
 
     close(badTarget[1]);
 
-    std::vector<int> targets{goodTarget[0], badTarget[0]};
-    auto failed = message_broker::TeeExact(source[1], targets, input.size());
+    std::vector<int> targetFds{
+        goodTarget[0],
+        badTarget[0]
+    };
+
+    message_broker::Pipeline sourcePipeline;
+    message_broker::Pipeline goodPipeline;
+    message_broker::Pipeline badPipeline;
+
+    std::vector<message_broker::Pipeline*> targetPipelines{
+        &goodPipeline,
+        &badPipeline
+    };
+
+    auto failed = message_broker::TeeExact(
+        source[1],
+        targetFds,
+        input.size(),
+        sourcePipeline,
+        targetPipelines
+    );
 
     assert(failed.contains(badTarget[0]));
 

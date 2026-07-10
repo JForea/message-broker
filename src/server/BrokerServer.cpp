@@ -9,15 +9,36 @@
 
 #include <cerrno>
 #include <stdexcept>
+#include <algorithm>
+
+namespace {
+
+    std::vector<int> GetTargetFds(
+        const std::vector<std::shared_ptr<message_broker::ClientConnection>>& connections
+    ) {
+        std::vector<int> targetFds;
+        targetFds.reserve(connections.size());
+
+        for (const auto& connection : connections)
+            targetFds.push_back(connection->fd);
+
+        return targetFds;
+    }
+
+}
 
 namespace message_broker {
 
-    BrokerServer::BrokerServer(std::string_view socketPath) : _socket(socketPath) {
+    BrokerServer::BrokerServer(
+        std::string_view socketPath,
+        size_t threadCount,
+        size_t pipeCount
+    ) : _socket(socketPath), _threadPool(threadCount), _pipePool(pipeCount) {
         _epollFd = epoll_create1(EPOLL_CLOEXEC);
         if (_epollFd == -1)
             throw std::runtime_error("Failed to create epoll instance.");
 
-        AddToEpoll(_socket.GetFd());
+        AddServerToEpoll();
     }
 
     BrokerServer::~BrokerServer() noexcept {
@@ -43,6 +64,34 @@ namespace message_broker {
 
             return std::nullopt;
         }
+    }
+
+    void BrokerServer::HandleClientEvent(int fd) noexcept {
+        bool keepAlive = true;
+
+        try {
+            HandleClientPacket(fd);
+        } catch (const ProtocolException& e) {
+            try {
+                ServerPacketWriter writer(fd);
+                writer.WriteError(e.GetErrorCode());
+            } catch (const std::runtime_error&) {
+                keepAlive = false;
+            }
+        } catch (const std::runtime_error&) {
+            keepAlive = false;
+        }
+
+        if (keepAlive) {
+            try {
+                RearmClientInEpoll(fd);
+            } catch (const std::runtime_error&) {
+                keepAlive = false;
+            }
+        }
+
+        if (!keepAlive)
+            DisconnectClient(fd);
     }
 
     void BrokerServer::HandleClientPacket(int fd) {
@@ -84,21 +133,24 @@ namespace message_broker {
     void BrokerServer::HandleSendMessage(int fd, ServerPacketReader& reader) {
         SendMessageHeader header = reader.ReadSendMessageHeader();
 
-        auto senderGuidOpt = _clients.FindGuidByFd(fd);
-        if (!senderGuidOpt)
+        auto senderConnection = _clients.FindByFd(fd);
+        if (!senderConnection)
             throw std::runtime_error("Couldn't find sender GUID during SendMessage.");
 
-        auto targetFdOpt = _clients.FindFdByGuid(header.target);
-        if (!targetFdOpt)
+        auto targetConnection = _clients.FindByGuid(header.target);
+        if (!targetConnection)
             throw UnknownTargetIdException();
 
-        int targetFd = targetFdOpt.value();
+        std::lock_guard lock(targetConnection->writeMutex);
 
+        int targetFd = targetConnection->fd;
         try {
             ServerPacketWriter writer(targetFd);        
-            writer.WriteMessageHeader(senderGuidOpt.value(), header.payloadSize);
+            writer.WriteMessageHeader(senderConnection->guid, header.payloadSize);
 
-            SpliceExact(fd, targetFd, header.payloadSize);
+            auto pipeHandle = _pipePool.Acquire();
+
+            SpliceExact(fd, targetFd, header.payloadSize, pipeHandle.Get());
         } catch (const std::runtime_error&) {
             DisconnectClient(targetFd);
         }
@@ -107,44 +159,113 @@ namespace message_broker {
     void BrokerServer::HandleBroadcast(int fd, ServerPacketReader& reader) {
         uint32_t payloadSize = reader.ReadBroadcastHeader();
 
-        auto senderGuidOpt = _clients.FindGuidByFd(fd);
-        if (!senderGuidOpt)
+        auto senderConnection = _clients.FindByFd(fd);
+        if (!senderConnection)
             throw std::runtime_error("Couldn't find sender GUID during Broadcast.");
 
-        auto targetFds = _clients.GetBroadcastTargets(fd);
+        auto targetConnections = _clients.GetBroadcastTargets(fd);
 
-        for (auto targetFd : targetFds) {
-            ServerPacketWriter writer(targetFd);
+        // We lock multiple client write mutexes below.
+        // Always acquire them in the same order to avoid deadlocks between
+        // concurrent broadcasts with overlapping target sets.
+        std::sort(
+            targetConnections.begin(),
+            targetConnections.end(),
+            [](const auto& lhs, const auto& rhs) {
+                return lhs->fd < rhs->fd;
+            }
+        );
 
-            writer.WriteMessageHeader(senderGuidOpt.value(), payloadSize);
+        std::vector<std::unique_lock<std::mutex>> locks;
+        locks.reserve(targetConnections.size());
+
+        for (const auto& connection : targetConnections)
+            locks.emplace_back(connection->writeMutex);
+
+        std::vector<int> targetFds = GetTargetFds(targetConnections);
+
+        for (const auto& connection : targetConnections) {
+            ServerPacketWriter writer(connection->fd);
+            writer.WriteMessageHeader(senderConnection->guid, payloadSize);
         }
 
-        auto failedFds = TeeExact(fd, targetFds, payloadSize);
+        size_t targetCount = targetFds.size();
+
+        auto pipeHandles = _pipePool.AcquireMany(targetCount + 1);
+
+        Pipeline& source = pipeHandles[0].Get();
+
+        std::vector<Pipeline*> targets;
+        targets.reserve(targetCount);
+
+        for (std::size_t i = 1; i < pipeHandles.size(); ++i)
+            targets.push_back(&pipeHandles[i].Get());
+
+        auto failedFds = TeeExact(
+            fd, targetFds, 
+            payloadSize,
+            source,
+            targets
+        );
 
         for (int failedFd : failedFds)
             DisconnectClient(failedFd);
     }
 
-    void BrokerServer::AddToEpoll(int fd) {
-        epoll_event event {};
-        event.events = EPOLLIN | EPOLLRDHUP;
+    void BrokerServer::UpdateEpoll(
+        int fd,
+        int operation,
+        uint32_t events,
+        const char* errorMessage
+    ) {
+        epoll_event event{};
+        event.events = events;
         event.data.fd = fd;
 
-        if (epoll_ctl(_epollFd, EPOLL_CTL_ADD, fd, &event) == -1)
-            throw std::runtime_error("Failed to add file descriptor to epoll.");
+        if (epoll_ctl(_epollFd, operation, fd, &event) == -1)
+            throw std::runtime_error(errorMessage);
     }
 
-    void BrokerServer::RemoveFromEpoll(int fd) {
+    void BrokerServer::AddServerToEpoll() {
+        UpdateEpoll(
+            _socket.GetFd(),
+            EPOLL_CTL_ADD,
+            EPOLLIN,
+            "Failed to add server socket to epoll."
+        );
+    }
+
+    void BrokerServer::AddClientToEpoll(int fd) {
+        UpdateEpoll(
+            fd,
+            EPOLL_CTL_ADD,
+            EPOLLIN | EPOLLRDHUP | EPOLLONESHOT,
+            "Failed to add client socket to epoll."
+        );
+    }
+
+    void BrokerServer::RearmClientInEpoll(int fd) {
+        UpdateEpoll(
+            fd,
+            EPOLL_CTL_MOD,
+            EPOLLIN | EPOLLRDHUP | EPOLLONESHOT,
+            "Failed to rearm client socket in epoll."
+        );
+    }
+
+    void BrokerServer::RemoveFromEpoll(int fd) noexcept {
         if (_epollFd == -1)
             return;
 
         epoll_ctl(_epollFd, EPOLL_CTL_DEL, fd, nullptr);
     }
 
-    void BrokerServer::DisconnectClient(int fd) {
+    void BrokerServer::DisconnectClient(int fd) noexcept {
         RemoveFromEpoll(fd);
-        _clients.Remove(fd);
-        close(fd);
+
+        auto connection = _clients.Remove(fd);
+        if (connection)        
+            close(fd);
     }
 
     void BrokerServer::Run() {
@@ -160,7 +281,7 @@ namespace message_broker {
                 if (errno == EINTR)
                     continue;
 
-                if (!_running && errno == EBADF)
+                if (!_running.load() && errno == EBADF)
                     return;
 
                 throw std::runtime_error("epoll_wait failed.");
@@ -180,17 +301,12 @@ namespace message_broker {
                     auto clientFd = AcceptClient();
 
                     if (clientFd)
-                        AddToEpoll(clientFd.value());
+                        AddClientToEpoll(clientFd.value());
                 } else {
                     try {
-                        HandleClientPacket(fd);
-                    } catch (const ProtocolException& e) {
-                        try {
-                            ServerPacketWriter writer(fd);
-                            writer.WriteError(e.GetErrorCode());
-                        } catch (const std::runtime_error&) {
-                            DisconnectClient(fd);
-                        }
+                        _threadPool.Enqueue([this, fd] {
+                            HandleClientEvent(fd);
+                        });
                     } catch (const std::runtime_error&) {
                         // Close connection only if IO error has occurred.
                         DisconnectClient(fd);
@@ -198,6 +314,9 @@ namespace message_broker {
                 }
             }
         }
+
+        _threadPool.Stop();
+        _pipePool.Stop();
     }
 
     void BrokerServer::Stop() noexcept {

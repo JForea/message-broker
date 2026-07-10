@@ -4,6 +4,7 @@
 #include "ServerSocketTests.hpp"
 #include "BrokerServerTests.hpp"
 #include "BrokerClientTests.hpp"
+#include "BrokerConcurrencyTests.hpp"
 
 #include <csignal>
 
@@ -39,5 +40,10 @@ int main() {
 
     // CLIENTSERVER TESTS
     TestBrokerClientRegister();
+
+    // BROKERSERVER CONCURRENCY TESTS
+    TestConcurrentClientRegistration();
+    TestConcurrentSendMessagesToSameTarget();
+    TestConcurrentBroadcastsDoNotDeadlock();
 
 }
