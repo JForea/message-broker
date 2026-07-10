@@ -8,6 +8,11 @@
 #include <stdexcept>
 
 namespace message_broker {
+
+    void ClientSocket::Close() noexcept {
+        if (_fd != -1)
+            close(_fd);
+    }
     
     ClientSocket::ClientSocket(std::string_view socketPath) {
         _fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -26,9 +31,27 @@ namespace message_broker {
             throw std::runtime_error("Failed to connect to server socket.");
     }
 
+    ClientSocket::ClientSocket(ClientSocket&& other) noexcept : _fd(other._fd) {
+        other._fd = -1;
+    }
+    
+    ClientSocket& ClientSocket::operator=(ClientSocket&& other) noexcept {
+        if (this != &other) {
+            Close();
+
+            _fd = other._fd;
+            other._fd = -1;
+        }
+
+        return *this;
+    }
+
+    int ClientSocket::GetFd() const noexcept {
+            return _fd;
+    }
+
     ClientSocket::~ClientSocket() noexcept {
-        if (_fd != -1)
-            close(_fd);
+        Close();
     }
 
 }

@@ -1,29 +1,44 @@
-#include "BrokerClient.hpp"
+#include <message_broker/BrokerClient.hpp>
+#include <message_broker/Exceptions.hpp>
 
 #include <poll.h>
-
-#include <message_broker/Exceptions.hpp>
 
 #include "shared/Defaults.hpp"
 
 namespace message_broker {
     
-    BrokerClient::BrokerClient(const Guid& guid) :
-            _guid(guid),
-            _socket(ClientSocket(DefaultSocketPath)),
-            _reader(ClientPacketReader(_socket.GetFd())),
-            _writer(ClientPacketWriter(_socket.GetFd())) 
+    BrokerClient::BrokerClient(const Guid& guid, std::string_view socketPath = DefaultSocketPath) :
+        _guid(guid),
+        _socket(socketPath),
+        _reader(ClientPacketReader(GetSocketFd())),
+        _writer(ClientPacketWriter(GetSocketFd())) 
     {
         Register();
     }
 
-    BrokerClient::BrokerClient(const Guid& guid, std::string_view socketPath) :
-            _guid(guid),
-            _socket(ClientSocket(socketPath)),
-            _reader(ClientPacketReader(_socket.GetFd())),
-            _writer(ClientPacketWriter(_socket.GetFd())) 
-    {
-        Register();
+    BrokerClient::BrokerClient(BrokerClient&& other) :
+        _guid(std::move(other._guid)),
+        _socket(std::move(other._socket)),
+        _reader(ClientPacketReader(GetSocketFd())),
+        _writer(ClientPacketWriter(GetSocketFd())) {}
+
+    BrokerClient& BrokerClient::operator=(BrokerClient&& other) {
+        if (this != &other) {
+            _guid = other._guid;
+            _socket = std::move(other._socket);
+            _reader = ClientPacketReader(GetSocketFd());
+            _writer = ClientPacketWriter(GetSocketFd());
+        }
+
+        return *this;
+    }
+
+    int BrokerClient::GetSocketFd() const {
+        return _socket.GetFd();
+    }
+
+    const Guid& BrokerClient::GetClientId() const noexcept {
+        return _guid;
     }
 
     void BrokerClient::Register() {
