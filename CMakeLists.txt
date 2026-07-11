@@ -49,7 +49,7 @@ add_library(
 
 target_link_libraries(
     message-broker-client
-    PRIVATE
+    PUBLIC
         message-broker-shared
 )
 
@@ -94,3 +94,11 @@ add_test(
     NAME ApplicationTests
     COMMAND message-broker-tests
 )
+
+# EXAMPLES
+
+option(BUILD_EXAMPLES "Build examples" OFF)
+
+if (BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
