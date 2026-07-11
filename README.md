@@ -8,6 +8,12 @@ IPC message broker using Unix Domain Sockets.
 cmake -S . -B build
 ```
 
+Or if you would like to build example applications too:
+
+```bash
+cmake -S . -B build -DBUILD_EXAMPLES=ON
+```
+
 ## Build
 
 ```bash
