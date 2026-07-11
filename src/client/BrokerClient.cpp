@@ -3,11 +3,10 @@
 
 #include <poll.h>
 
-#include "shared/Defaults.hpp"
 
 namespace message_broker {
     
-    BrokerClient::BrokerClient(const Guid& guid, std::string_view socketPath = DefaultSocketPath) :
+    BrokerClient::BrokerClient(const Guid& guid, std::string_view socketPath) :
         _guid(guid),
         _socket(socketPath),
         _reader(ClientPacketReader(GetSocketFd())),

@@ -5,6 +5,7 @@
 
 #include "client/ClientSocket.hpp"
 #include "shared/io/PacketIO.hpp"
+#include "shared/Defaults.hpp"
 
 namespace message_broker {
 
@@ -20,7 +21,7 @@ namespace message_broker {
         void WaitForAck();
 
     public:
-        explicit BrokerClient(const Guid& guid, std::string_view socketPath);
+        explicit BrokerClient(const Guid& guid, std::string_view socketPath = DefaultSocketPath);
 
         BrokerClient(const BrokerClient&) = delete;
         BrokerClient& operator=(const BrokerClient&) = delete;
